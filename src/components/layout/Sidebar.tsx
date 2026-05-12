@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -63,17 +64,20 @@ export function Sidebar({ userName, userInitial, userEmail, onClose }: SidebarPr
     <aside className="flex flex-col h-full bg-sidebar w-60">
 
       {/* Header / Logo */}
-      <div className="flex items-center gap-3 px-5 py-[22px] border-b border-sidebar-border">
-        <div className="w-8 h-8 rounded-lg bg-sidebar-accent flex items-center justify-center flex-shrink-0">
-          <svg className="w-4 h-4 text-sidebar-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <line x1="12" y1="1" x2="12" y2="23" />
-            <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
-          </svg>
+      <div className="px-4 pt-5 pb-4 border-b border-sidebar-border">
+        <div className="bg-white rounded-xl px-3 py-2.5 flex items-center justify-center">
+          <Image
+            src="/logo.webp"
+            alt="Iglesia Apostólica Fuente de Verdad"
+            width={148}
+            height={74}
+            className="object-contain"
+            priority
+          />
         </div>
-        <div>
-          <span className="block text-[13px] font-bold text-sidebar-foreground leading-tight">Fuente de Verdad</span>
-          <span className="block text-[11px] text-sidebar-foreground/50 mt-0.5">Poblado · Medellín</span>
-        </div>
+        <p className="text-center text-[10px] text-sidebar-foreground/40 tracking-wider mt-2.5">
+          Poblado · Medellín
+        </p>
       </div>
 
       {/* Navegación */}

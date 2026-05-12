@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\" -Force | Select-Object -Property Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\" -Directory | ForEach-Object { Write-Host \"=== $\\($_.Name\\) ===\" ; Get-ChildItem -Path $_.FullName -Force | Select-Object -Property Name | ForEach-Object { \"  \" + $_.Name } })",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\\\\src\\\\app\" -Recurse -Depth 2 | Select-Object -Property FullName | ForEach-Object {$_.FullName.Replace\\(\"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\\\\\",\"\"\\)} | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\\\\src\\\\components\" -Recurse -Depth 2 | Select-Object -Property FullName | ForEach-Object {$_.FullName.Replace\\(\"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\\\\\",\"\"\\)} | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\\\\src\\\\types\" -Recurse | Select-Object -Property FullName | ForEach-Object {$_.FullName.Replace\\(\"c:\\\\Users\\\\Administración\\\\Documents\\\\INTECH SOLUTION CODE\\\\crm-fuente-de-verdad\\\\\",\"\"\\)} | Sort-Object)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Administración\\\\Downloads\" | Where-Object { $_.Extension -match \"\\\\.\\(png|jpg|jpeg|svg|webp\\)\" } | Select-Object Name, LastWriteTime | Sort-Object LastWriteTime -Descending | Select-Object -First 10)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Administración\\\\Downloads\" -Recurse | Where-Object { $_.Extension -match \"\\\\.\\(png|jpg|jpeg|svg|webp|PNG|JPG|JPEG|SVG\\)\" } | Select-Object FullName, LastWriteTime | Sort-Object LastWriteTime -Descending | Select-Object -First 15 | Format-List)"
+    ]
+  }
+}

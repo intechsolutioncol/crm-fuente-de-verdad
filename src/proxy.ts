@@ -28,21 +28,36 @@ export async function proxy(request: NextRequest) {
   // Refresca la sesión — NUNCA elimines esta línea
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isPublicPath =
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/api/auth')
+  const { pathname } = request.nextUrl
+  const isPublicPath    = pathname.startsWith('/login') || pathname.startsWith('/api/auth')
+  const isOnboardingPath = pathname.startsWith('/onboarding')
+  const onboardingDone  = user?.user_metadata?.onboarding_completed === true
 
-  // Sin sesión → redirige al login
+  // Sin sesión → login
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Con sesión en login → redirige al dashboard
-  if (user && request.nextUrl.pathname === '/login') {
+  // Con sesión en /login → dashboard o onboarding según si ya completó perfil
+  if (user && pathname === '/login') {
+    const url = request.nextUrl.clone()
+    url.pathname = onboardingDone ? '/' : '/onboarding'
+    return NextResponse.redirect(url)
+  }
+
+  // Con sesión, ya completó onboarding, intenta entrar a /onboarding → dashboard
+  if (user && isOnboardingPath && onboardingDone) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  // Con sesión, sin onboarding, en ruta protegida → /onboarding
+  if (user && !isPublicPath && !isOnboardingPath && !onboardingDone) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/onboarding'
     return NextResponse.redirect(url)
   }
 

@@ -102,3 +102,63 @@ create policy "finanzas_delete"
 -- select tablename, rowsecurity from pg_tables where tablename = 'finanzas';
 -- select policyname, cmd, qual from pg_policies where tablename = 'finanzas';
 -- select indexname from pg_indexes where tablename = 'finanzas';
+
+-- ================================================================
+-- MÓDULO MIEMBROS
+-- ================================================================
+create table if not exists public.miembros (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid references auth.users(id) on delete cascade not null,
+  nombres          text not null,
+  apellidos        text not null,
+  fecha_nacimiento date not null,
+  direccion        text not null,
+  barrio           text not null,
+  municipio        text not null default 'Medellín',
+  celular          text not null,
+  correo           text not null,
+  rol              text not null default 'Miembro Oficial',
+  estado           text not null default 'Activo',
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+
+  unique (user_id),
+  unique (correo),
+
+  constraint miembros_nombres_min   check (char_length(nombres) >= 2),
+  constraint miembros_apellidos_min check (char_length(apellidos) >= 2),
+  constraint miembros_rol_valido    check (rol in ('Miembro Oficial', 'Líder', 'Pastor', 'Administrador')),
+  constraint miembros_estado_valido check (estado in ('Activo', 'Inactivo', 'Visitante'))
+);
+
+drop trigger if exists trg_miembros_updated_at on public.miembros;
+create trigger trg_miembros_updated_at
+  before update on public.miembros
+  for each row execute function public.set_updated_at();
+
+create index if not exists idx_miembros_user_id on public.miembros (user_id);
+create index if not exists idx_miembros_estado  on public.miembros (estado);
+
+alter table public.miembros enable row level security;
+
+drop policy if exists "miembros_select" on public.miembros;
+drop policy if exists "miembros_insert" on public.miembros;
+drop policy if exists "miembros_update" on public.miembros;
+
+-- Cualquier miembro autenticado puede ver todos los miembros
+create policy "miembros_select"
+  on public.miembros for select
+  to authenticated
+  using (true);
+
+-- Solo puede insertar su propio perfil
+create policy "miembros_insert"
+  on public.miembros for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+-- Solo puede actualizar su propio perfil
+create policy "miembros_update"
+  on public.miembros for update
+  to authenticated
+  using (auth.uid() = user_id);

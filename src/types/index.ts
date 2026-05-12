@@ -8,9 +8,11 @@ export interface Miembro {
   nombres: string
   apellidos: string
   fecha_nacimiento: string  // 'YYYY-MM-DD'
+  pais: string
+  departamento: string | null
+  municipio: string | null
+  barrio: string | null
   direccion: string
-  barrio: string
-  municipio: string
   celular: string
   correo: string
   rol: RolMiembro
@@ -23,9 +25,11 @@ export interface MiembroFormData {
   nombres: string
   apellidos: string
   fecha_nacimiento: string
-  direccion: string
-  barrio: string
+  pais: string
+  departamento: string
   municipio: string
+  barrio: string
+  direccion: string
   celular: string
   correo: string
 }

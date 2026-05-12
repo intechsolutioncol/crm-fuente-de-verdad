@@ -112,9 +112,11 @@ create table if not exists public.miembros (
   nombres          text not null,
   apellidos        text not null,
   fecha_nacimiento date not null,
+  pais             text not null default 'Colombia',
+  departamento     text,                          -- Departamento (Colombia) o ciudad (exterior)
+  municipio        text,                          -- Nullable: solo aplica para Colombia
+  barrio           text,                          -- Nullable: solo aplica para Colombia
   direccion        text not null,
-  barrio           text not null,
-  municipio        text not null default 'Medellín',
   celular          text not null,
   correo           text not null,
   rol              text not null default 'Miembro Oficial',

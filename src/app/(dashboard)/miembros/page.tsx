@@ -7,11 +7,11 @@ function formatFecha(iso: string) {
 }
 
 function calcEdad(fechaNacimiento: string) {
-  const hoy  = new Date()
-  const nac  = new Date(fechaNacimiento)
-  let edad   = hoy.getFullYear() - nac.getFullYear()
-  const diff = hoy.getMonth() - nac.getMonth()
-  if (diff < 0 || (diff === 0 && hoy.getDate() < nac.getDate())) edad--
+  const [y, m, d] = fechaNacimiento.split('-').map(Number)
+  const hoy = new Date()
+  let edad  = hoy.getFullYear() - y
+  const mesActual = hoy.getMonth() + 1
+  if (mesActual < m || (mesActual === m && hoy.getDate() < d)) edad--
   return edad
 }
 

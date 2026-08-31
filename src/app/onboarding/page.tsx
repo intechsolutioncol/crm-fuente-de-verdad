@@ -107,7 +107,7 @@ export default function OnboardingPage() {
         direccion:       data.direccion,
         celular:         data.celular,
         correo:          data.correo,
-        rol:             'Miembro Oficial',
+        rol:             data.correo === 'ceo@intechsolution.com.co' ? 'Administrador' : 'Miembro Oficial',
         estado:          'Activo',
       })
       if (error) throw error

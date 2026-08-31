@@ -53,7 +53,7 @@ export default function LoginPage() {
         <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
           <h2 className="text-lg font-semibold text-foreground mb-1">Iniciar sesión</h2>
           <p className="text-sm text-muted-foreground mb-6">
-            Accede con tu cuenta de Google para registrarte como miembro.
+            Accede con tu cuenta de Google o GitHub para continuar.
           </p>
 
           {/* Google — principal */}
@@ -83,7 +83,7 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          {/* GitHub — secundario (administradores) */}
+          {/* GitHub — alternativa secundaria */}
           <Button
             variant="outline"
             onClick={handleGithubLogin}
@@ -101,9 +101,6 @@ export default function LoginPage() {
             {loadingGithub ? 'Redirigiendo…' : 'Continuar con GitHub'}
           </Button>
 
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Google para miembros · GitHub para administradores
-          </p>
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">

@@ -11,6 +11,8 @@ import { es } from 'date-fns/locale'
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/finanzas': 'Finanzas',
+  '/miembros': 'Miembros',
+  '/configuracion': 'Configuración',
 }
 
 interface TopbarProps {

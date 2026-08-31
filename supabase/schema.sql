@@ -7,6 +7,10 @@
 -- Después de correr este script, en el Dashboard:
 --   Project Settings > API > Exposed schemas → agregar "fuente_verdad"
 --   (si no, PostgREST no expone estas tablas y supabase-js fallará)
+--
+-- NOTA: esta es la versión "instalación nueva". Si ya tienes datos
+-- corriendo con una versión anterior de este schema, usa las
+-- migraciones en supabase/migracion_*.sql en vez de re-correr esto.
 -- ================================================================
 
 -- ────────────────────────────────────────────────────────────────
@@ -40,7 +44,7 @@ $$;
 
 -- ================================================================
 -- MÓDULO MIEMBROS
--- (se crea antes que finanzas porque finanzas depende de is_miembro())
+-- (se crea antes que finanzas porque finanzas depende de mi_permiso())
 -- ================================================================
 create table if not exists fuente_verdad.miembros (
   id               uuid primary key default gen_random_uuid(),
@@ -65,7 +69,7 @@ create table if not exists fuente_verdad.miembros (
 
   constraint miembros_nombres_min   check (char_length(nombres) >= 2),
   constraint miembros_apellidos_min check (char_length(apellidos) >= 2),
-  constraint miembros_rol_valido    check (rol in ('Miembro Oficial', 'Líder', 'Pastor', 'Administrador')),
+  constraint miembros_rol_valido    check (rol in ('Miembro Oficial', 'Diácono', 'Líder', 'Pastor', 'Administrador')),
   constraint miembros_estado_valido check (estado in ('Activo', 'Inactivo', 'Visitante'))
 );
 
@@ -104,30 +108,112 @@ as $$
   );
 $$;
 
+-- ================================================================
+-- PERMISOS POR ROL Y MÓDULO
+--
+-- Cada rol no-administrador tiene un nivel ('ninguno' | 'lector' |
+-- 'editor') por módulo ('miembros' | 'finanzas'), configurable desde
+-- la pantalla /configuracion. Administrador siempre tiene acceso
+-- total y no tiene filas aquí — se resuelve en código.
+-- ================================================================
+create table if not exists fuente_verdad.permisos (
+  rol    text not null,
+  modulo text not null check (modulo in ('miembros', 'finanzas')),
+  nivel  text not null default 'lector' check (nivel in ('ninguno', 'lector', 'editor')),
+
+  primary key (rol, modulo),
+  constraint permisos_rol_valido check (rol in ('Miembro Oficial', 'Diácono', 'Líder', 'Pastor'))
+);
+
+-- Semilla: todos los roles no-administrador arrancan en "lector"
+insert into fuente_verdad.permisos (rol, modulo, nivel)
+select rol, modulo, 'lector'
+from unnest(array['Miembro Oficial', 'Diácono', 'Líder', 'Pastor']) as rol
+cross join unnest(array['miembros', 'finanzas']) as modulo
+on conflict (rol, modulo) do nothing;
+
+create or replace function fuente_verdad.es_administrador()
+returns boolean
+language sql
+security definer
+set search_path = fuente_verdad
+stable
+as $$
+  select exists (
+    select 1 from fuente_verdad.miembros
+    where user_id = auth.uid() and rol = 'Administrador'
+  );
+$$;
+
+-- Nivel de acceso del usuario actual a un módulo dado.
+-- 'ninguno' si no es miembro; 'editor' siempre si es Administrador;
+-- si no, lo que diga la tabla permisos para su rol ('ninguno' si no hay fila).
+create or replace function fuente_verdad.mi_permiso(p_modulo text)
+returns text
+language sql
+security definer
+set search_path = fuente_verdad
+stable
+as $$
+  select case
+    when not fuente_verdad.is_miembro() then 'ninguno'
+    when fuente_verdad.es_administrador() then 'editor'
+    else coalesce(
+      (select p.nivel
+         from fuente_verdad.permisos p
+         join fuente_verdad.miembros m on m.rol = p.rol
+        where m.user_id = auth.uid() and p.modulo = p_modulo),
+      'ninguno')
+  end;
+$$;
+
+alter table fuente_verdad.permisos enable row level security;
+
+drop policy if exists "permisos_select" on fuente_verdad.permisos;
+drop policy if exists "permisos_write" on fuente_verdad.permisos;
+
+-- Solo Administrador lee/escribe la tabla de permisos (mi_permiso()
+-- la sigue leyendo para todos, porque corre security definer)
+create policy "permisos_select"
+  on fuente_verdad.permisos for select
+  to authenticated
+  using (fuente_verdad.es_administrador());
+
+create policy "permisos_write"
+  on fuente_verdad.permisos for all
+  to authenticated
+  using (fuente_verdad.es_administrador())
+  with check (fuente_verdad.es_administrador());
+
+-- ────────────────────────────────────────────────────────────────
+-- RLS · MIEMBROS
+-- ────────────────────────────────────────────────────────────────
 drop policy if exists "miembros_select" on fuente_verdad.miembros;
 drop policy if exists "miembros_insert" on fuente_verdad.miembros;
 drop policy if exists "miembros_update" on fuente_verdad.miembros;
 
--- Lectura: solo quien ya es miembro (evita que usuarios autenticados
--- en otra app del mismo proyecto lean la lista de la iglesia)
+-- Lectura: requiere permiso 'lector' o 'editor' en el módulo miembros
+-- (Administrador siempre pasa por el bypass de mi_permiso())
 create policy "miembros_select"
   on fuente_verdad.miembros for select
   to authenticated
-  using (fuente_verdad.is_miembro());
+  using (fuente_verdad.mi_permiso('miembros') in ('lector', 'editor'));
 
--- Inserción: bootstrap — un usuario nuevo aún no es "miembro",
--- por eso esta política NO usa is_miembro(), solo valida que
+-- Inserción: bootstrap — un usuario nuevo aún no tiene rol asignado,
+-- por eso esta política NO usa mi_permiso(), solo valida que
 -- se esté creando su propio perfil (correo/OAuth ya lo autentica)
 create policy "miembros_insert"
   on fuente_verdad.miembros for insert
   to authenticated
   with check (auth.uid() = user_id);
 
--- Actualización: solo su propio perfil
+-- Actualización: cualquiera edita su propio perfil; solo Administrador
+-- edita (o reasigna el rol de) el perfil de otros miembros
 create policy "miembros_update"
   on fuente_verdad.miembros for update
   to authenticated
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id or fuente_verdad.es_administrador())
+  with check (auth.uid() = user_id or fuente_verdad.es_administrador());
 
 -- ================================================================
 -- MÓDULO FINANZAS
@@ -176,7 +262,7 @@ create trigger trg_finanzas_updated_at
   for each row execute function fuente_verdad.set_updated_at();
 
 -- ────────────────────────────────────────────────────────────────
--- ROW LEVEL SECURITY
+-- RLS · FINANZAS
 -- ────────────────────────────────────────────────────────────────
 alter table fuente_verdad.finanzas enable row level security;
 
@@ -185,26 +271,27 @@ drop policy if exists "finanzas_insert" on fuente_verdad.finanzas;
 drop policy if exists "finanzas_update" on fuente_verdad.finanzas;
 drop policy if exists "finanzas_delete" on fuente_verdad.finanzas;
 
--- Todas las operaciones: solo miembros de la iglesia (ver is_miembro() arriba)
+-- Lectura: requiere permiso 'lector' o 'editor' en el módulo finanzas
 create policy "finanzas_select"
   on fuente_verdad.finanzas for select
   to authenticated
-  using (fuente_verdad.is_miembro());
+  using (fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor'));
 
+-- Escritura: requiere permiso 'editor' en el módulo finanzas
 create policy "finanzas_insert"
   on fuente_verdad.finanzas for insert
   to authenticated
-  with check (fuente_verdad.is_miembro());
+  with check (fuente_verdad.mi_permiso('finanzas') = 'editor');
 
 create policy "finanzas_update"
   on fuente_verdad.finanzas for update
   to authenticated
-  using (fuente_verdad.is_miembro());
+  using (fuente_verdad.mi_permiso('finanzas') = 'editor');
 
 create policy "finanzas_delete"
   on fuente_verdad.finanzas for delete
   to authenticated
-  using (fuente_verdad.is_miembro());
+  using (fuente_verdad.mi_permiso('finanzas') = 'editor');
 
 -- ────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (ejecuta estas líneas por separado si quieres)
@@ -212,3 +299,4 @@ create policy "finanzas_delete"
 -- select tablename, rowsecurity from pg_tables where schemaname = 'fuente_verdad';
 -- select policyname, cmd, qual from pg_policies where schemaname = 'fuente_verdad';
 -- select indexname from pg_indexes where schemaname = 'fuente_verdad';
+-- select * from fuente_verdad.permisos order by rol, modulo;

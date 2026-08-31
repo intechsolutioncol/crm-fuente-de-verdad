@@ -6,15 +6,17 @@ import { createClient } from '@/lib/supabase/client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
 import { cn } from '@/lib/utils'
+import type { RolMiembro } from '@/types'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [user, setUser] = useState<{ name: string; initial: string; email: string } | null>(null)
+  const [userRol, setUserRol] = useState<RolMiembro | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
         router.replace('/login')
         return
@@ -27,6 +29,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .map((p: string) => p.charAt(0).toUpperCase() + p.slice(1))
         .join(' ')
       setUser({ name, initial: name.charAt(0).toUpperCase(), email })
+
+      const { data: miembro } = await supabase
+        .from('miembros')
+        .select('rol')
+        .eq('user_id', data.user.id)
+        .single()
+      setUserRol((miembro?.rol as RolMiembro) ?? null)
     })
   }, [router])
 
@@ -39,6 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           userName={user?.name ?? '…'}
           userInitial={user?.initial ?? '?'}
           userEmail={user?.email ?? ''}
+          userRol={userRol}
         />
       </div>
 

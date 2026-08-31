@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
 import type { Miembro } from '@/types'
 
 function formatFecha(iso: string) {
@@ -17,6 +18,7 @@ function calcEdad(fechaNacimiento: string) {
 
 const ROL_COLOR: Record<string, string> = {
   'Miembro Oficial': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  'Diácono':         'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
   'Líder':           'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
   'Pastor':          'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
   'Administrador':   'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -30,6 +32,16 @@ const ESTADO_COLOR: Record<string, string> = {
 
 export default async function MiembrosPage() {
   const supabase = await createClient()
+
+  const { data: nivel } = await supabase.rpc('mi_permiso', { p_modulo: 'miembros' })
+
+  if (nivel !== 'lector' && nivel !== 'editor') {
+    return (
+      <div className="p-6 max-w-6xl mx-auto">
+        <AccesoDenegado />
+      </div>
+    )
+  }
 
   const { data: miembros } = await supabase
     .from('miembros')

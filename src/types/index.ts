@@ -1,6 +1,22 @@
 // ── Miembros ──────────────────────────────────────────────────
-export type RolMiembro = 'Miembro Oficial' | 'Líder' | 'Pastor' | 'Administrador'
+export type RolMiembro = 'Miembro Oficial' | 'Diácono' | 'Líder' | 'Pastor' | 'Administrador'
 export type EstadoMiembro = 'Activo' | 'Inactivo' | 'Visitante'
+
+// ── Permisos ──────────────────────────────────────────────────
+export type Modulo = 'miembros' | 'finanzas'
+export type NivelPermiso = 'ninguno' | 'lector' | 'editor'
+export const ROLES_CONFIGURABLES: Exclude<RolMiembro, 'Administrador'>[] =
+  ['Miembro Oficial', 'Diácono', 'Líder', 'Pastor']
+export const MODULOS_PERMISO: { id: Modulo; label: string }[] = [
+  { id: 'miembros', label: 'Miembros' },
+  { id: 'finanzas', label: 'Finanzas' },
+]
+
+export interface Permiso {
+  rol: Exclude<RolMiembro, 'Administrador'>
+  modulo: Modulo
+  nivel: NivelPermiso
+}
 
 export interface Miembro {
   id: string

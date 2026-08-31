@@ -4,19 +4,29 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { FinanzasDashboard } from '@/components/finanzas/FinanzasDashboard'
 import { FinanzasLista } from '@/components/finanzas/FinanzasLista'
+import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
 import { cn } from '@/lib/utils'
+import type { NivelPermiso } from '@/types'
 
 type Tab = 'dashboard' | 'registros'
 
 export default function FinanzasPage() {
   const [tab, setTab] = useState<Tab>('dashboard')
   const [userEmail, setUserEmail] = useState('')
+  const [nivel, setNivel] = useState<NivelPermiso | null>(null)
 
   useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
       setUserEmail(data.user?.email ?? '')
     })
+    supabase.rpc('mi_permiso', { p_modulo: 'finanzas' }).then(({ data }) => {
+      setNivel((data as NivelPermiso) ?? 'ninguno')
+    })
   }, [])
+
+  if (nivel === null) return null
+  if (nivel === 'ninguno') return <AccesoDenegado />
 
   return (
     <div>
@@ -40,7 +50,7 @@ export default function FinanzasPage() {
 
       {tab === 'dashboard'
         ? <FinanzasDashboard onGoLista={() => setTab('registros')} />
-        : <FinanzasLista userEmail={userEmail} />
+        : <FinanzasLista userEmail={userEmail} isEditor={nivel === 'editor'} />
       }
     </div>
   )

@@ -31,9 +31,10 @@ const TIPO_VARIANT: Record<TipoAporte, 'default' | 'secondary' | 'outline'> = {
 
 interface Props {
   userEmail: string
+  isEditor: boolean
 }
 
-export function FinanzasLista({ userEmail }: Props) {
+export function FinanzasLista({ userEmail, isEditor }: Props) {
   const [aportes, setAportes] = useState<Aporte[]>([])
   const [loading, setLoading] = useState(true)
   const [filtros, setFiltros] = useState<FiltrosFinanzas>({
@@ -127,12 +128,14 @@ export function FinanzasLista({ userEmail }: Props) {
 
         <div className="flex gap-2 ml-auto">
           <Button variant="outline" size="sm" onClick={limpiarFiltros}>Limpiar</Button>
-          <Button onClick={() => setModalForm({ open: true, aporte: null })}>
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Nuevo Aporte
-          </Button>
+          {isEditor && (
+            <Button onClick={() => setModalForm({ open: true, aporte: null })}>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Nuevo Aporte
+            </Button>
+          )}
         </div>
       </div>
 
@@ -173,9 +176,11 @@ export function FinanzasLista({ userEmail }: Props) {
                           <polyline points="14 2 14 8 20 8" />
                         </svg>
                         <p className="text-sm mb-3">No hay registros con los filtros actuales.</p>
-                        <Button size="sm" onClick={() => setModalForm({ open: true, aporte: null })}>
-                          Registrar primer aporte
-                        </Button>
+                        {isEditor && (
+                          <Button size="sm" onClick={() => setModalForm({ open: true, aporte: null })}>
+                            Registrar primer aporte
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -188,28 +193,30 @@ export function FinanzasLista({ userEmail }: Props) {
                     <td className="px-4 py-3 font-bold text-primary whitespace-nowrap">{formatCOP(a.monto)}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px] truncate">{a.observaciones || '—'}</td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => setModalForm({ open: true, aporte: a })}
-                          className="w-8 h-8 flex items-center justify-center rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                          title="Editar"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setModalDel({ open: true, id: a.id, nombre: a.nombre })}
-                          className="w-8 h-8 flex items-center justify-center rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
-                          title="Eliminar"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                          </svg>
-                        </button>
-                      </div>
+                      {isEditor && (
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => setModalForm({ open: true, aporte: a })}
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                            title="Editar"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setModalDel({ open: true, id: a.id, nombre: a.nombre })}
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                            title="Eliminar"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -197,7 +197,7 @@ export default function OnboardingPage() {
               <Label>País <span className="text-destructive">*</span></Label>
               <Select
                 value={pais}
-                onValueChange={v => setValue('pais', v, { shouldValidate: true })}
+                onValueChange={v => v && setValue('pais', v, { shouldValidate: true })}
               >
                 <SelectTrigger className={`w-full ${errors.pais ? 'border-destructive' : ''}`}>
                   <SelectValue placeholder="Selecciona un país" />
@@ -217,7 +217,7 @@ export default function OnboardingPage() {
                   <Label>Departamento <span className="text-destructive">*</span></Label>
                   <Select
                     value={departamento ?? ''}
-                    onValueChange={v => setValue('departamento', v, { shouldValidate: true })}
+                    onValueChange={v => v && setValue('departamento', v, { shouldValidate: true })}
                   >
                     <SelectTrigger className={`w-full ${errors.departamento ? 'border-destructive' : ''}`}>
                       <SelectValue placeholder="Selecciona el departamento" />

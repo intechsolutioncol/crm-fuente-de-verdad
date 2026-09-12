@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatCOPShort, formatFecha } from '@/lib/utils/format'
-import { CATEGORIAS_INGRESO, CATEGORIAS_EGRESO } from '@/types'
-import type { Movimiento, DashboardData, Categoria } from '@/types'
+import type { Movimiento, DashboardData, TipoMovimiento } from '@/types'
 import { Badge } from '@/components/ui/badge'
 
 const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -16,8 +15,8 @@ function calcularDashboard(movimientos: Movimiento[]): DashboardData {
 
   let totalIngresosMes = 0, totalEgresosMes = 0
   let totalIngresosAnual = 0, totalEgresosAnual = 0
-  const porCategoriaIngreso = Object.fromEntries(CATEGORIAS_INGRESO.map(c => [c, 0])) as DashboardData['porCategoriaIngreso']
-  const porCategoriaEgreso = Object.fromEntries(CATEGORIAS_EGRESO.map(c => [c, 0])) as DashboardData['porCategoriaEgreso']
+  const porCategoriaIngreso: Record<string, number> = {}
+  const porCategoriaEgreso: Record<string, number> = {}
   const ingresosPorMes: Record<number, number> = {}
   const egresosPorMes: Record<number, number> = {}
 
@@ -32,12 +31,12 @@ function calcularDashboard(movimientos: Movimiento[]): DashboardData {
       totalIngresosAnual += m.monto
       if (mes === mesActual) totalIngresosMes += m.monto
       ingresosPorMes[mes] = (ingresosPorMes[mes] ?? 0) + m.monto
-      if (m.tipo in porCategoriaIngreso) porCategoriaIngreso[m.tipo as keyof typeof porCategoriaIngreso] += m.monto
+      porCategoriaIngreso[m.tipo] = (porCategoriaIngreso[m.tipo] ?? 0) + m.monto
     } else {
       totalEgresosAnual += m.monto
       if (mes === mesActual) totalEgresosMes += m.monto
       egresosPorMes[mes] = (egresosPorMes[mes] ?? 0) + m.monto
-      if (m.tipo in porCategoriaEgreso) porCategoriaEgreso[m.tipo as keyof typeof porCategoriaEgreso] += m.monto
+      porCategoriaEgreso[m.tipo] = (porCategoriaEgreso[m.tipo] ?? 0) + m.monto
     }
   }
 
@@ -105,12 +104,8 @@ function BarChart({ data }: { data: { mes: string; total: number }[] }) {
   )
 }
 
-function badgeCategoria(categoria: Categoria, esEgreso: boolean) {
-  if (esEgreso) return <Badge variant="outline">{categoria}</Badge>
-  const map: Record<string, 'default' | 'secondary' | 'outline'> = {
-    Diezmo: 'default', Ofrenda: 'secondary', Donación: 'outline',
-  }
-  return <Badge variant={map[categoria] ?? 'outline'}>{categoria}</Badge>
+function badgeCategoria(categoria: string, tipoMovimiento: TipoMovimiento) {
+  return <Badge variant={tipoMovimiento === 'ingreso' ? 'default' : 'outline'}>{categoria}</Badge>
 }
 
 interface Props {
@@ -255,7 +250,7 @@ export function FinanzasDashboard({ onGoLista }: Props) {
                   <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 text-xs text-muted-foreground">{formatFecha(m.fecha)}</td>
                     <td className="px-4 py-3 font-semibold">{m.nombre}</td>
-                    <td className="px-4 py-3">{badgeCategoria(m.tipo, esEgreso)}</td>
+                    <td className="px-4 py-3">{badgeCategoria(m.tipo, m.tipo_movimiento)}</td>
                     <td className="px-4 py-3 text-xs">{m.metodo_pago}</td>
                     <td className={`px-4 py-3 font-bold ${esEgreso ? 'text-destructive' : 'text-primary'}`}>
                       {esEgreso ? '- ' : ''}{formatCOP(m.monto)}

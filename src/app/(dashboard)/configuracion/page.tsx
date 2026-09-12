@@ -3,7 +3,8 @@ import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { RolesTab } from '@/components/configuracion/RolesTab'
 import { PermisosTab } from '@/components/configuracion/PermisosTab'
-import type { Miembro, Permiso } from '@/types'
+import { CategoriasFinanzasTab } from '@/components/configuracion/CategoriasFinanzasTab'
+import type { Miembro, Permiso, CategoriaFinanzas } from '@/types'
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
@@ -18,9 +19,10 @@ export default async function ConfiguracionPage() {
     )
   }
 
-  const [{ data: miembros }, { data: permisos }] = await Promise.all([
+  const [{ data: miembros }, { data: permisos }, { data: categoriasFinanzas }] = await Promise.all([
     supabase.from('miembros').select('*').order('nombres', { ascending: true }),
     supabase.from('permisos').select('*'),
+    supabase.from('categorias_finanzas').select('*'),
   ])
 
   return (
@@ -34,6 +36,7 @@ export default async function ConfiguracionPage() {
         <TabsList>
           <TabsTrigger value="roles">Miembros y roles</TabsTrigger>
           <TabsTrigger value="permisos">Permisos por módulo</TabsTrigger>
+          <TabsTrigger value="categorias-finanzas">Categorías de Finanzas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roles">
@@ -42,6 +45,10 @@ export default async function ConfiguracionPage() {
 
         <TabsContent value="permisos">
           <PermisosTab permisosIniciales={(permisos ?? []) as Permiso[]} />
+        </TabsContent>
+
+        <TabsContent value="categorias-finanzas">
+          <CategoriasFinanzasTab categoriasIniciales={(categoriasFinanzas ?? []) as CategoriaFinanzas[]} />
         </TabsContent>
       </Tabs>
     </div>

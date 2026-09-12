@@ -1,13 +1,13 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { movimientoSchema } from '@/lib/validations/finanzas'
 import { createClient } from '@/lib/supabase/client'
 import { todayISO } from '@/lib/utils/format'
-import { CATEGORIAS_INGRESO, CATEGORIAS_EGRESO } from '@/types'
-import type { Movimiento, TipoMovimiento } from '@/types'
+import type { Movimiento, TipoMovimiento, CategoriaFinanzas } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -56,7 +56,20 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
 
   const tipoMovimiento = watch('tipo_movimiento')
   const esIngreso = tipoMovimiento === 'ingreso'
-  const categorias = esIngreso ? CATEGORIAS_INGRESO : CATEGORIAS_EGRESO
+
+  const [categoriasFinanzas, setCategoriasFinanzas] = useState<CategoriaFinanzas[]>([])
+  useEffect(() => {
+    createClient()
+      .from('categorias_finanzas')
+      .select('*')
+      .eq('activo', true)
+      .order('orden')
+      .then(({ data }) => setCategoriasFinanzas((data ?? []) as CategoriaFinanzas[]))
+  }, [])
+
+  const categorias = categoriasFinanzas
+    .filter(c => c.tipo_movimiento === tipoMovimiento)
+    .map(c => c.nombre)
 
   function cambiarDireccion(nuevo: TipoMovimiento) {
     setValue('tipo_movimiento', nuevo)

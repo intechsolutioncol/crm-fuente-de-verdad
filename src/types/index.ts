@@ -52,29 +52,25 @@ export interface MiembroFormData {
 
 // ── Finanzas ───────────────────────────────────────────────────
 export type TipoMovimiento = 'ingreso' | 'egreso'
-export type CategoriaIngreso = 'Diezmo' | 'Ofrenda' | 'Donación'
-export type CategoriaEgreso =
-  | 'Arriendo'
-  | 'Servicios Públicos'
-  | 'Mantenimiento'
-  | 'Honorarios y Pastoral'
-  | 'Eventos y Logística'
-  | 'Otro'
-export type Categoria = CategoriaIngreso | CategoriaEgreso
 export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Otro'
 
-export const CATEGORIAS_INGRESO: CategoriaIngreso[] = ['Diezmo', 'Ofrenda', 'Donación']
-export const CATEGORIAS_EGRESO: CategoriaEgreso[] = [
-  'Arriendo', 'Servicios Públicos', 'Mantenimiento',
-  'Honorarios y Pastoral', 'Eventos y Logística', 'Otro',
-]
+// Las categorías ya no son un set fijo: son configurables desde
+// /configuracion (tabla fuente_verdad.categorias_finanzas). El FK en
+// la base de datos es la validación real; aquí solo son `string`.
+export interface CategoriaFinanzas {
+  id: string
+  tipo_movimiento: TipoMovimiento
+  nombre: string
+  activo: boolean
+  orden: number
+}
 
 export interface Movimiento {
   id: string
   fecha: string          // 'YYYY-MM-DD'
   nombre: string
   tipo_movimiento: TipoMovimiento
-  tipo: Categoria
+  tipo: string            // categoría — nombre de fuente_verdad.categorias_finanzas
   metodo_pago: MetodoPago
   monto: number
   observaciones: string
@@ -87,7 +83,7 @@ export interface MovimientoFormData {
   fecha: string
   nombre: string
   tipo_movimiento: TipoMovimiento
-  tipo: Categoria | ''
+  tipo: string
   metodo_pago: MetodoPago | ''
   monto: string
   observaciones: string
@@ -96,7 +92,7 @@ export interface MovimientoFormData {
 export interface FiltrosFinanzas {
   nombre: string
   tipoMovimiento: TipoMovimiento | 'Todos'
-  tipo: Categoria | 'Todos'
+  tipo: string | 'Todos'
   fechaInicio: string
   fechaFin: string
 }
@@ -109,8 +105,8 @@ export interface DashboardData {
   totalEgresosAnual: number
   balanceAnual: number
   totalRegistros: number
-  porCategoriaIngreso: Record<CategoriaIngreso, number>
-  porCategoriaEgreso: Record<CategoriaEgreso, number>
+  porCategoriaIngreso: Record<string, number>
+  porCategoriaEgreso: Record<string, number>
   graficoData: { mes: string; total: number }[]
   ultimosMovimientos: Movimiento[]
 }

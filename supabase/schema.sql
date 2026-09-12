@@ -216,6 +216,53 @@ create policy "miembros_update"
   with check (auth.uid() = user_id or fuente_verdad.es_administrador());
 
 -- ================================================================
+-- CATEGORÍAS DE FINANZAS
+-- Configurables desde /configuracion — agregar una categoría nueva
+-- no requiere migración ni deploy. Nunca se borran (solo se
+-- desactivan) para no romper el historial de movimientos.
+-- ================================================================
+create table if not exists fuente_verdad.categorias_finanzas (
+  id              uuid primary key default gen_random_uuid(),
+  tipo_movimiento text not null check (tipo_movimiento in ('ingreso', 'egreso')),
+  nombre          text not null,
+  activo          boolean not null default true,
+  orden           int not null default 0,
+  created_at      timestamptz not null default now(),
+
+  unique (tipo_movimiento, nombre)
+);
+
+insert into fuente_verdad.categorias_finanzas (tipo_movimiento, nombre, orden) values
+  ('ingreso', 'Diezmo', 1), ('ingreso', 'Ofrenda', 2), ('ingreso', 'Donación', 3),
+  ('egreso', 'Arriendo', 1), ('egreso', 'Servicios Públicos', 2), ('egreso', 'Mantenimiento', 3),
+  ('egreso', 'Honorarios y Pastoral', 4), ('egreso', 'Eventos y Logística', 5), ('egreso', 'Otro', 6)
+on conflict (tipo_movimiento, nombre) do nothing;
+
+alter table fuente_verdad.categorias_finanzas enable row level security;
+
+drop policy if exists "categorias_finanzas_select" on fuente_verdad.categorias_finanzas;
+drop policy if exists "categorias_finanzas_insert" on fuente_verdad.categorias_finanzas;
+drop policy if exists "categorias_finanzas_update" on fuente_verdad.categorias_finanzas;
+
+-- Leer requiere el mismo permiso de Finanzas (los <Select> del formulario las necesitan)
+create policy "categorias_finanzas_select"
+  on fuente_verdad.categorias_finanzas for select
+  to authenticated
+  using (fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor'));
+
+-- Crear/editar categorías es exclusivo de Administrador (sin política de delete)
+create policy "categorias_finanzas_insert"
+  on fuente_verdad.categorias_finanzas for insert
+  to authenticated
+  with check (fuente_verdad.es_administrador());
+
+create policy "categorias_finanzas_update"
+  on fuente_verdad.categorias_finanzas for update
+  to authenticated
+  using (fuente_verdad.es_administrador())
+  with check (fuente_verdad.es_administrador());
+
+-- ================================================================
 -- MÓDULO FINANZAS
 -- ================================================================
 create table if not exists fuente_verdad.finanzas (
@@ -231,17 +278,13 @@ create table if not exists fuente_verdad.finanzas (
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
 
-  constraint finanzas_nombre_min           check (char_length(nombre) >= 2),
+  constraint finanzas_nombre_min            check (char_length(nombre) >= 2),
   constraint finanzas_tipo_movimiento_valido check (tipo_movimiento in ('ingreso', 'egreso')),
-  -- La categoría (`tipo`) válida depende de la dirección del movimiento
-  constraint finanzas_tipo_valido check (
-    (tipo_movimiento = 'ingreso' and tipo in ('Diezmo', 'Ofrenda', 'Donación'))
-    or
-    (tipo_movimiento = 'egreso' and tipo in (
-      'Arriendo', 'Servicios Públicos', 'Mantenimiento',
-      'Honorarios y Pastoral', 'Eventos y Logística', 'Otro'
-    ))
-  ),
+  -- La categoría (`tipo`) debe existir en categorias_finanzas para esa misma
+  -- dirección; on update cascade: renombrar una categoría actualiza el historial.
+  constraint finanzas_tipo_fk foreign key (tipo_movimiento, tipo)
+    references fuente_verdad.categorias_finanzas (tipo_movimiento, nombre)
+    on update cascade,
   constraint finanzas_metodo_valido  check (metodo_pago in ('Efectivo', 'Transferencia', 'Otro')),
   constraint finanzas_monto_positivo check (monto > 0)
 );

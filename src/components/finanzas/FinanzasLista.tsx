@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatFecha } from '@/lib/utils/format'
-import { CATEGORIAS_INGRESO, CATEGORIAS_EGRESO } from '@/types'
-import type { Movimiento, FiltrosFinanzas, Categoria, TipoMovimiento } from '@/types'
+import type { Movimiento, FiltrosFinanzas, TipoMovimiento, CategoriaFinanzas } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -24,16 +23,8 @@ import {
 import { MovimientoForm } from './MovimientoForm'
 import { ConfirmDelete } from './ConfirmDelete'
 
-const CATEGORIA_VARIANT: Record<Categoria, 'default' | 'secondary' | 'outline'> = {
-  Diezmo: 'default',
-  Ofrenda: 'secondary',
-  Donación: 'outline',
-  Arriendo: 'outline',
-  'Servicios Públicos': 'outline',
-  Mantenimiento: 'outline',
-  'Honorarios y Pastoral': 'outline',
-  'Eventos y Logística': 'outline',
-  Otro: 'outline',
+function categoriaVariant(tipoMovimiento: TipoMovimiento): 'default' | 'outline' {
+  return tipoMovimiento === 'ingreso' ? 'default' : 'outline'
 }
 
 interface Props {
@@ -52,6 +43,16 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
   const [modalDel, setModalDel] = useState<{ open: boolean; id: string; nombre: string }>({ open: false, id: '', nombre: '' })
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [categoriasFinanzas, setCategoriasFinanzas] = useState<CategoriaFinanzas[]>([])
+  useEffect(() => {
+    createClient()
+      .from('categorias_finanzas')
+      .select('*')
+      .eq('activo', true)
+      .order('orden')
+      .then(({ data }) => setCategoriasFinanzas((data ?? []) as CategoriaFinanzas[]))
+  }, [])
 
   const cargar = useCallback(async (f: FiltrosFinanzas) => {
     setLoading(true)
@@ -130,8 +131,7 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Todos">Todas las categorías</SelectItem>
-            {CATEGORIAS_INGRESO.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            {CATEGORIAS_EGRESO.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            {categoriasFinanzas.map(c => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
           </SelectContent>
         </Select>
 
@@ -222,7 +222,7 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                   <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatFecha(m.fecha)}</td>
                     <td className="px-4 py-3 font-semibold">{m.nombre}</td>
-                    <td className="px-4 py-3"><Badge variant={CATEGORIA_VARIANT[m.tipo]}>{m.tipo}</Badge></td>
+                    <td className="px-4 py-3"><Badge variant={categoriaVariant(m.tipo_movimiento)}>{m.tipo}</Badge></td>
                     <td className="px-4 py-3 text-xs">{m.metodo_pago}</td>
                     <td className={`px-4 py-3 font-bold whitespace-nowrap ${esEgreso ? 'text-destructive' : 'text-primary'}`}>
                       {esEgreso ? '- ' : ''}{formatCOP(m.monto)}

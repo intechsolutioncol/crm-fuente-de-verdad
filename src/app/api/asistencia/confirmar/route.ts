@@ -1,16 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-
-function hoyColombia(): string {
-  // El servidor (Vercel) corre en UTC; la fecha del check-in debe ser
-  // la fecha en Colombia, no la fecha UTC (evita que domingo en la
-  // noche cuente como lunes).
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Bogota',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  })
-  return formatter.format(new Date()) // 'en-CA' produce YYYY-MM-DD
-}
+import { hoyColombia } from '@/lib/utils/fecha-servidor'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)

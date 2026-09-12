@@ -2,14 +2,15 @@
 
 import { useMemo, useState } from 'react'
 import { formatFecha } from '@/lib/utils/format'
-import type { Asistencia, Miembro } from '@/types'
+import type { Asistencia, Miembro, Visitante } from '@/types'
 
 interface Props {
   miembros: Pick<Miembro, 'id' | 'nombres' | 'apellidos'>[]
   asistencia: Asistencia[]
+  visitantes: Visitante[]
 }
 
-export function AsistenciaReportes({ miembros, asistencia }: Props) {
+export function AsistenciaReportes({ miembros, asistencia, visitantes }: Props) {
   const [busqueda, setBusqueda] = useState('')
   const [miembroId, setMiembroId] = useState<string | null>(null)
 
@@ -45,11 +46,12 @@ export function AsistenciaReportes({ miembros, asistencia }: Props) {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Confirmaciones (90 días)', value: totalConfirmaciones },
           { label: 'Domingos con datos', value: domingosConDatos },
           { label: 'Promedio por domingo', value: promedioPorDomingo },
+          { label: 'Visitantes nuevos (90 días)', value: visitantes.length },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card border border-border rounded-xl p-5">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
@@ -120,6 +122,46 @@ export function AsistenciaReportes({ miembros, asistencia }: Props) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Visitantes recientes */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-border bg-muted/40">
+          <p className="text-sm font-semibold text-foreground">Visitantes recientes</p>
+        </div>
+        {visitantes.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">Aún no hay visitantes registrados.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/20">
+                  {['Nombre', 'Celular', 'Cómo llegó', 'Primera visita'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visitantes.map(v => (
+                  <tr key={v.id}>
+                    <td className="px-4 py-2.5 font-medium text-foreground whitespace-nowrap">{v.nombres} {v.apellidos}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{v.celular || '—'}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {v.como_se_entero === 'Invitado por un miembro' && v.referido_por
+                        ? `Invitado por ${v.referido_por}`
+                        : v.como_se_entero === 'Otro' && v.como_se_entero_otro
+                          ? v.como_se_entero_otro
+                          : v.como_se_entero}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatFecha(v.primera_visita)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

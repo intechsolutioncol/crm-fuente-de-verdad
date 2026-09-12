@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
 import { AsistenciaReportes } from '@/components/asistencia/AsistenciaReportes'
-import type { Asistencia, Miembro } from '@/types'
+import type { Asistencia, Miembro, Visitante } from '@/types'
 
 export default async function AsistenciaPage() {
   const supabase = await createClient()
@@ -20,9 +20,10 @@ export default async function AsistenciaPage() {
   desde.setDate(desde.getDate() - 90)
   const desdeISO = desde.toISOString().slice(0, 10)
 
-  const [{ data: miembros }, { data: asistencia }] = await Promise.all([
+  const [{ data: miembros }, { data: asistencia }, { data: visitantes }] = await Promise.all([
     supabase.from('miembros').select('id, nombres, apellidos').order('nombres'),
     supabase.from('asistencia').select('*').gte('fecha', desdeISO).order('fecha', { ascending: false }),
+    supabase.from('visitantes').select('*').gte('primera_visita', desdeISO).order('primera_visita', { ascending: false }),
   ])
 
   return (
@@ -35,6 +36,7 @@ export default async function AsistenciaPage() {
       <AsistenciaReportes
         miembros={(miembros ?? []) as Pick<Miembro, 'id' | 'nombres' | 'apellidos'>[]}
         asistencia={(asistencia ?? []) as Asistencia[]}
+        visitantes={(visitantes ?? []) as Visitante[]}
       />
     </div>
   )

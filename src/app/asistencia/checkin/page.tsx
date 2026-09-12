@@ -4,9 +4,16 @@ import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { formatFechaLarga, todayISO } from '@/lib/utils/format'
+import { OPCIONES_COMO_SE_ENTERO } from '@/types'
+import type { ComoSeEntero } from '@/types'
+
+type TipoPersona = 'miembro' | 'visitante'
 
 interface Persona {
+  tipo: TipoPersona
   id: string
   nombres: string
   apellidos: string
@@ -16,6 +23,7 @@ type Estado =
   | { paso: 'cargando' }
   | { paso: 'recordado'; persona: Persona }
   | { paso: 'buscando'; aviso?: string }
+  | { paso: 'formularioInvitado' }
   | { paso: 'confirmando'; nombre: string }
   | { paso: 'confirmado'; nombre: string; yaConfirmado: boolean }
 
@@ -46,6 +54,10 @@ function olvidarRecordado() {
   }
 }
 
+function nombreCompletoDe(p: Persona): string {
+  return `${p.nombres} ${p.apellidos}`.trim()
+}
+
 export default function AsistenciaCheckinPage() {
   const [query, setQuery] = useState('')
   const [resultados, setResultados] = useState<Persona[]>([])
@@ -70,20 +82,24 @@ export default function AsistenciaCheckinPage() {
     debounceRef.current = setTimeout(async () => {
       const res = await fetch(`/api/asistencia/buscar?q=${encodeURIComponent(query.trim())}`)
       const data = await res.json()
-      setResultados(data.resultados ?? [])
+      const miembros: Persona[] = (data.resultados ?? []).map((m: { id: string; nombres: string; apellidos: string }) => ({ tipo: 'miembro' as const, ...m }))
+      setResultados(miembros)
       setBuscando(false)
     }, 350)
   }, [query, estado.paso])
 
   async function confirmar(persona: Persona) {
-    const nombreCompleto = `${persona.nombres} ${persona.apellidos}`
+    const nombreCompleto = nombreCompletoDe(persona)
     setEstado({ paso: 'confirmando', nombre: nombreCompleto })
 
     try {
-      const res = await fetch('/api/asistencia/confirmar', {
+      const url = persona.tipo === 'miembro' ? '/api/asistencia/confirmar' : '/api/asistencia/confirmar-invitado'
+      const payload = persona.tipo === 'miembro' ? { miembro_id: persona.id } : { visitante_id: persona.id }
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ miembro_id: persona.id }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error('confirmar falló')
       const data = await res.json()
@@ -93,6 +109,36 @@ export default function AsistenciaCheckinPage() {
     } catch {
       olvidarRecordado()
       setEstado({ paso: 'buscando', aviso: 'No pudimos confirmar automáticamente. Busca tu nombre para intentar de nuevo.' })
+    }
+  }
+
+  async function confirmarInvitadoNuevo(datos: {
+    nombres: string; apellidos: string; celular: string
+    comoSeEntero: ComoSeEntero; referidoPor: string; comoSeEnteroOtro: string
+  }) {
+    setEstado({ paso: 'confirmando', nombre: datos.nombres })
+
+    try {
+      const res = await fetch('/api/asistencia/confirmar-invitado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombres: datos.nombres,
+          apellidos: datos.apellidos,
+          celular: datos.celular || undefined,
+          referido_por: datos.referidoPor || undefined,
+          como_se_entero: datos.comoSeEntero,
+          como_se_entero_otro: datos.comoSeEnteroOtro || undefined,
+        }),
+      })
+      if (!res.ok) throw new Error('confirmar-invitado falló')
+      const data = await res.json()
+
+      const persona: Persona = { tipo: 'visitante', id: data.visitante_id, nombres: data.nombres, apellidos: data.apellidos }
+      guardarRecordado(persona)
+      setEstado({ paso: 'confirmado', nombre: `${data.nombres} ${data.apellidos}`.trim(), yaConfirmado: !!data.yaConfirmado })
+    } catch {
+      setEstado({ paso: 'buscando', aviso: 'No pudimos registrar tu visita. Intenta de nuevo.' })
     }
   }
 
@@ -141,7 +187,7 @@ export default function AsistenciaCheckinPage() {
                 {estado.persona.nombres.charAt(0).toUpperCase()}
               </div>
               <h2 className="text-lg font-bold text-foreground mb-1">
-                ¿Eres {estado.persona.nombres} {estado.persona.apellidos}?
+                ¿Eres {nombreCompletoDe(estado.persona)}?
               </h2>
               <p className="text-sm text-muted-foreground mb-6">
                 Toca confirmar para registrar tu asistencia de hoy.
@@ -203,9 +249,17 @@ export default function AsistenciaCheckinPage() {
                   <p className="text-xs text-muted-foreground text-center py-2">Buscando...</p>
                 )}
                 {!buscando && query.trim().length >= 2 && resultados.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-2">
-                    No encontramos a nadie con ese nombre.
-                  </p>
+                  <div className="text-center py-2 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      No encontramos a nadie con ese nombre.
+                    </p>
+                    <button
+                      onClick={() => setEstado({ paso: 'formularioInvitado' })}
+                      className="text-sm font-semibold text-primary hover:underline"
+                    >
+                      ¿Es tu primera vez? Regístrate como visitante
+                    </button>
+                  </div>
                 )}
                 {resultados.map(m => (
                   <button
@@ -220,11 +274,102 @@ export default function AsistenciaCheckinPage() {
               </div>
             </>
           )}
+
+          {estado.paso === 'formularioInvitado' && (
+            <FormularioInvitado onConfirmar={confirmarInvitadoNuevo} onCancelar={() => setEstado({ paso: 'buscando' })} />
+          )}
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
           Iglesia Apostólica Fuente de Verdad
         </p>
+      </div>
+    </div>
+  )
+}
+
+interface FormularioInvitadoProps {
+  onConfirmar: (datos: {
+    nombres: string; apellidos: string; celular: string
+    comoSeEntero: ComoSeEntero; referidoPor: string; comoSeEnteroOtro: string
+  }) => void
+  onCancelar: () => void
+}
+
+function FormularioInvitado({ onConfirmar, onCancelar }: FormularioInvitadoProps) {
+  const [nombres, setNombres] = useState('')
+  const [apellidos, setApellidos] = useState('')
+  const [celular, setCelular] = useState('')
+  const [comoSeEntero, setComoSeEntero] = useState<ComoSeEntero>('Invitado por un miembro')
+  const [referidoPor, setReferidoPor] = useState('')
+  const [comoSeEnteroOtro, setComoSeEnteroOtro] = useState('')
+
+  const puedeEnviar = nombres.trim().length >= 2
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-foreground mb-1">¡Bienvenido! Cuéntanos de ti</h2>
+      <p className="text-sm text-muted-foreground mb-5">
+        Solo tu nombre es obligatorio — lo demás es opcional.
+      </p>
+
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="v-nombres">Nombres *</Label>
+            <Input id="v-nombres" value={nombres} onChange={e => setNombres(e.target.value)} placeholder="Tu nombre" autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="v-apellidos">Apellidos</Label>
+            <Input id="v-apellidos" value={apellidos} onChange={e => setApellidos(e.target.value)} placeholder="Tus apellidos" />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="v-celular">Celular (opcional)</Label>
+          <Input id="v-celular" type="tel" value={celular} onChange={e => setCelular(e.target.value)} placeholder="300 000 0000" />
+        </div>
+
+        <div className="space-y-2">
+          <Label>¿Cómo llegaste a la iglesia? (opcional)</Label>
+          <RadioGroup
+            value={comoSeEntero}
+            onValueChange={v => v && setComoSeEntero(v as ComoSeEntero)}
+            className="flex-col items-start gap-2"
+          >
+            {OPCIONES_COMO_SE_ENTERO.map(op => (
+              <RadioGroupItem key={op} value={op}>{op}</RadioGroupItem>
+            ))}
+          </RadioGroup>
+
+          {comoSeEntero === 'Invitado por un miembro' && (
+            <Input
+              value={referidoPor}
+              onChange={e => setReferidoPor(e.target.value)}
+              placeholder="¿Quién te invitó?"
+              className="mt-2"
+            />
+          )}
+          {comoSeEntero === 'Otro' && (
+            <Input
+              value={comoSeEnteroOtro}
+              onChange={e => setComoSeEnteroOtro(e.target.value)}
+              placeholder="Cuéntanos cómo llegaste"
+              className="mt-2"
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3 pt-5 mt-5 border-t border-border">
+        <Button type="button" variant="outline" onClick={onCancelar}>Volver</Button>
+        <Button
+          type="button"
+          disabled={!puedeEnviar}
+          onClick={() => onConfirmar({ nombres: nombres.trim(), apellidos: apellidos.trim(), celular: celular.trim(), comoSeEntero, referidoPor: referidoPor.trim(), comoSeEnteroOtro: comoSeEnteroOtro.trim() })}
+        >
+          Confirmar mi asistencia
+        </Button>
       </div>
     </div>
   )

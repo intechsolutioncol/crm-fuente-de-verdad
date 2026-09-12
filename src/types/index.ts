@@ -115,9 +115,33 @@ export interface DashboardData {
 // ── Asistencia ─────────────────────────────────────────────────
 export interface Asistencia {
   id: string
-  miembro_id: string
+  miembro_id: string | null
+  visitante_id: string | null
   fecha: string      // 'YYYY-MM-DD'
   hora: string
   metodo: 'qr' | 'manual'
+  created_at: string
+}
+
+export type ComoSeEntero =
+  | 'Invitado por un miembro'
+  | 'Redes sociales'
+  | 'Buscando en internet'
+  | 'Pasaba por el lugar'
+  | 'Otro'
+
+export const OPCIONES_COMO_SE_ENTERO: ComoSeEntero[] = [
+  'Invitado por un miembro', 'Redes sociales', 'Buscando en internet', 'Pasaba por el lugar', 'Otro',
+]
+
+export interface Visitante {
+  id: string
+  nombres: string
+  apellidos: string
+  celular: string | null
+  referido_por: string | null
+  como_se_entero: ComoSeEntero
+  como_se_entero_otro: string | null
+  primera_visita: string
   created_at: string
 }

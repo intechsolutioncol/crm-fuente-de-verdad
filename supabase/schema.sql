@@ -350,20 +350,54 @@ create policy "finanzas_delete"
   using (fuente_verdad.mi_permiso('finanzas') = 'editor');
 
 -- ================================================================
+-- VISITANTES — invitados que aún no están en `miembros`. Se crean
+-- únicamente desde el check-in público (cliente admin), nunca desde
+-- RLS de usuarios autenticados.
+-- ================================================================
+create table if not exists fuente_verdad.visitantes (
+  id                  uuid primary key default gen_random_uuid(),
+  nombres             text not null,
+  apellidos           text not null default '',
+  celular             text,
+  referido_por        text,
+  como_se_entero      text not null default 'Otro'
+    check (como_se_entero in ('Invitado por un miembro', 'Redes sociales', 'Buscando en internet', 'Pasaba por el lugar', 'Otro')),
+  como_se_entero_otro text,
+  primera_visita      date not null,
+  created_at          timestamptz not null default now()
+);
+
+alter table fuente_verdad.visitantes enable row level security;
+
+create policy "visitantes_select"
+  on fuente_verdad.visitantes for select
+  to authenticated
+  using (fuente_verdad.mi_permiso('asistencia') in ('lector', 'editor'));
+
+-- ================================================================
 -- MÓDULO ASISTENCIA
 -- Check-in por QR sin login: el registro público no pasa por estas
 -- políticas (usa el cliente admin desde /api/asistencia). Estas RLS
 -- gobiernan el uso dentro del CRM (ver reportes).
+--
+-- Una fila es de un miembro O de un visitante, nunca ambos ni ninguno
+-- (asistencia_persona_check).
 -- ================================================================
 create table if not exists fuente_verdad.asistencia (
-  id         uuid primary key default gen_random_uuid(),
-  miembro_id uuid not null references fuente_verdad.miembros(id) on delete cascade,
-  fecha      date not null,
-  hora       timestamptz not null default now(),
-  metodo     text not null default 'qr' check (metodo in ('qr', 'manual')),
-  created_at timestamptz not null default now(),
+  id           uuid primary key default gen_random_uuid(),
+  miembro_id   uuid references fuente_verdad.miembros(id) on delete cascade,
+  visitante_id uuid references fuente_verdad.visitantes(id) on delete cascade,
+  fecha        date not null,
+  hora         timestamptz not null default now(),
+  metodo       text not null default 'qr' check (metodo in ('qr', 'manual')),
+  created_at   timestamptz not null default now(),
 
-  unique (miembro_id, fecha)
+  unique (miembro_id, fecha),
+  unique (visitante_id, fecha),
+  constraint asistencia_persona_check check (
+    (miembro_id is not null and visitante_id is null) or
+    (miembro_id is null and visitante_id is not null)
+  )
 );
 
 create index if not exists idx_asistencia_fecha

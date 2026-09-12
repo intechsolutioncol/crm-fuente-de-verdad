@@ -170,7 +170,12 @@ export default function AsistenciaCheckinPage() {
             />
           </div>
           <p className="text-sm font-semibold text-foreground capitalize">{formatFechaLarga(todayISO())}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Servicio dominical · Poblado, Medellín</p>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-4">Servicio dominical · Poblado, Medellín</p>
+          <h1 className="text-xl font-bold text-foreground">¡Bienvenido!</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Fuente de Verdad es un lugar donde Dios transforma tu dolor en su propósito.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">Completa tus datos abajo para confirmar tu asistencia.</p>
         </div>
 
         {/* Card */}

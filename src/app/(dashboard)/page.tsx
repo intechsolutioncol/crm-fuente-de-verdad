@@ -2,6 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatCOP } from '@/lib/utils/format'
 
+function balanceNeto(rows: { monto: number; tipo_movimiento: string }[]) {
+  return rows.reduce((s, r) => s + (r.tipo_movimiento === 'egreso' ? -r.monto : r.monto), 0)
+}
+
 async function getPreviewFinanzas() {
   const supabase = await createClient()
   const anioActual = new Date().getFullYear()
@@ -11,19 +15,19 @@ async function getPreviewFinanzas() {
   const [resAnual, resMes, resTotal] = await Promise.all([
     supabase
       .from('finanzas')
-      .select('monto')
+      .select('monto, tipo_movimiento')
       .gte('fecha', `${anioActual}-01-01`)
       .lte('fecha', `${anioActual}-12-31`),
     supabase
       .from('finanzas')
-      .select('monto')
+      .select('monto, tipo_movimiento')
       .gte('fecha', `${anioActual}-${mesStr}-01`)
       .lte('fecha', `${anioActual}-${mesStr}-31`),
     supabase.from('finanzas').select('id', { count: 'exact', head: true }),
   ])
 
-  const totalAnual = (resAnual.data ?? []).reduce((s: number, r: { monto: number }) => s + r.monto, 0)
-  const totalMes = (resMes.data ?? []).reduce((s: number, r: { monto: number }) => s + r.monto, 0)
+  const totalAnual = balanceNeto(resAnual.data ?? [])
+  const totalMes = balanceNeto(resMes.data ?? [])
   const totalRegistros = resTotal.count ?? 0
 
   return { totalAnual, totalMes, totalRegistros }
@@ -57,9 +61,9 @@ export default async function HomePage() {
       {/* Stats de Finanzas */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Total Mes Actual', value: formatCOP(preview.totalMes), sub: 'Finanzas · aportes' },
-          { label: `Total Año ${anio}`, value: formatCOP(preview.totalAnual), sub: 'Finanzas · acumulado' },
-          { label: 'Registros Totales', value: String(preview.totalRegistros), sub: 'Finanzas · todos los aportes' },
+          { label: 'Balance Mes Actual', value: formatCOP(preview.totalMes), sub: 'Finanzas · ingresos − egresos' },
+          { label: `Balance Año ${anio}`, value: formatCOP(preview.totalAnual), sub: 'Finanzas · ingresos − egresos' },
+          { label: 'Registros Totales', value: String(preview.totalRegistros), sub: 'Finanzas · todos los movimientos' },
         ].map(stat => (
           <div key={stat.label} className="bg-card border border-border rounded-xl p-5 shadow-sm">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">{stat.label}</p>

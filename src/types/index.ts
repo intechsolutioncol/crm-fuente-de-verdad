@@ -51,14 +51,30 @@ export interface MiembroFormData {
 }
 
 // ── Finanzas ───────────────────────────────────────────────────
-export type TipoAporte = 'Diezmo' | 'Ofrenda' | 'Donación'
+export type TipoMovimiento = 'ingreso' | 'egreso'
+export type CategoriaIngreso = 'Diezmo' | 'Ofrenda' | 'Donación'
+export type CategoriaEgreso =
+  | 'Arriendo'
+  | 'Servicios Públicos'
+  | 'Mantenimiento'
+  | 'Honorarios y Pastoral'
+  | 'Eventos y Logística'
+  | 'Otro'
+export type Categoria = CategoriaIngreso | CategoriaEgreso
 export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Otro'
 
-export interface Aporte {
+export const CATEGORIAS_INGRESO: CategoriaIngreso[] = ['Diezmo', 'Ofrenda', 'Donación']
+export const CATEGORIAS_EGRESO: CategoriaEgreso[] = [
+  'Arriendo', 'Servicios Públicos', 'Mantenimiento',
+  'Honorarios y Pastoral', 'Eventos y Logística', 'Otro',
+]
+
+export interface Movimiento {
   id: string
   fecha: string          // 'YYYY-MM-DD'
   nombre: string
-  tipo: TipoAporte
+  tipo_movimiento: TipoMovimiento
+  tipo: Categoria
   metodo_pago: MetodoPago
   monto: number
   observaciones: string
@@ -67,10 +83,11 @@ export interface Aporte {
   updated_at: string
 }
 
-export interface AporteFormData {
+export interface MovimientoFormData {
   fecha: string
   nombre: string
-  tipo: TipoAporte | ''
+  tipo_movimiento: TipoMovimiento
+  tipo: Categoria | ''
   metodo_pago: MetodoPago | ''
   monto: string
   observaciones: string
@@ -78,16 +95,22 @@ export interface AporteFormData {
 
 export interface FiltrosFinanzas {
   nombre: string
-  tipo: TipoAporte | 'Todos'
+  tipoMovimiento: TipoMovimiento | 'Todos'
+  tipo: Categoria | 'Todos'
   fechaInicio: string
   fechaFin: string
 }
 
 export interface DashboardData {
-  totalMensual: number
-  totalAnual: number
+  totalIngresosMes: number
+  totalEgresosMes: number
+  balanceMes: number
+  totalIngresosAnual: number
+  totalEgresosAnual: number
+  balanceAnual: number
   totalRegistros: number
-  porTipo: Record<TipoAporte, number>
+  porCategoriaIngreso: Record<CategoriaIngreso, number>
+  porCategoriaEgreso: Record<CategoriaEgreso, number>
   graficoData: { mes: string; total: number }[]
-  ultimosAportes: Aporte[]
+  ultimosMovimientos: Movimiento[]
 }

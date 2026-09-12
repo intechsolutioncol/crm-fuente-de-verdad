@@ -219,19 +219,29 @@ create policy "miembros_update"
 -- MÓDULO FINANZAS
 -- ================================================================
 create table if not exists fuente_verdad.finanzas (
-  id            uuid primary key default gen_random_uuid(),
-  fecha         date        not null,
-  nombre        text        not null,
-  tipo          text        not null,
-  metodo_pago   text        not null,
-  monto         numeric(14, 0) not null,
-  observaciones text        not null default '',
-  user_email    text        not null,
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now(),
+  id              uuid primary key default gen_random_uuid(),
+  fecha           date        not null,
+  nombre          text        not null,
+  tipo_movimiento text        not null default 'ingreso',
+  tipo            text        not null,
+  metodo_pago     text        not null,
+  monto           numeric(14, 0) not null,
+  observaciones   text        not null default '',
+  user_email      text        not null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
 
-  constraint finanzas_nombre_min     check (char_length(nombre) >= 2),
-  constraint finanzas_tipo_valido    check (tipo        in ('Diezmo', 'Ofrenda', 'Donación')),
+  constraint finanzas_nombre_min           check (char_length(nombre) >= 2),
+  constraint finanzas_tipo_movimiento_valido check (tipo_movimiento in ('ingreso', 'egreso')),
+  -- La categoría (`tipo`) válida depende de la dirección del movimiento
+  constraint finanzas_tipo_valido check (
+    (tipo_movimiento = 'ingreso' and tipo in ('Diezmo', 'Ofrenda', 'Donación'))
+    or
+    (tipo_movimiento = 'egreso' and tipo in (
+      'Arriendo', 'Servicios Públicos', 'Mantenimiento',
+      'Honorarios y Pastoral', 'Eventos y Logística', 'Otro'
+    ))
+  ),
   constraint finanzas_metodo_valido  check (metodo_pago in ('Efectivo', 'Transferencia', 'Otro')),
   constraint finanzas_monto_positivo check (monto > 0)
 );
@@ -251,6 +261,9 @@ create index if not exists idx_finanzas_nombre_trgm
 
 create index if not exists idx_finanzas_user_email
   on fuente_verdad.finanzas (user_email);
+
+create index if not exists idx_finanzas_tipo_movimiento
+  on fuente_verdad.finanzas (tipo_movimiento);
 
 -- ────────────────────────────────────────────────────────────────
 -- TRIGGER updated_at

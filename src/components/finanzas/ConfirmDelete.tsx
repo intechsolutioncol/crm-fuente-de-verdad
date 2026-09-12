@@ -25,7 +25,7 @@ export function ConfirmDelete({ id, nombre, onSuccess, onCancel }: ConfirmDelete
       toast.error('Error al eliminar: ' + error.message)
       return
     }
-    toast.success('Aporte eliminado correctamente')
+    toast.success('Movimiento eliminado correctamente')
     onSuccess()
   }
 
@@ -39,9 +39,9 @@ export function ConfirmDelete({ id, nombre, onSuccess, onCancel }: ConfirmDelete
           <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
         </svg>
       </div>
-      <h4 className="text-base font-bold text-foreground mb-2">¿Eliminar este aporte?</h4>
+      <h4 className="text-base font-bold text-foreground mb-2">¿Eliminar este movimiento?</h4>
       <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-        Se eliminará el aporte de <strong className="text-foreground">{nombre}</strong>.
+        Se eliminará el movimiento de <strong className="text-foreground">{nombre}</strong>.
         <br />Esta acción no se puede deshacer.
       </p>
       <div className="flex justify-center gap-3">

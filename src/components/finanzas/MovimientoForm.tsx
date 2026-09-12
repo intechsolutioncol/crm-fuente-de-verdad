@@ -3,16 +3,16 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { aporteSchema } from '@/lib/validations/finanzas'
-
-type AporteSchema = z.infer<typeof aporteSchema>
+import { movimientoSchema } from '@/lib/validations/finanzas'
 import { createClient } from '@/lib/supabase/client'
 import { todayISO } from '@/lib/utils/format'
-import type { Aporte } from '@/types'
+import { CATEGORIAS_INGRESO, CATEGORIAS_EGRESO } from '@/types'
+import type { Movimiento, TipoMovimiento } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import {
   Select,
   SelectContent,
@@ -22,15 +22,18 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 
-interface AporteFormProps {
-  aporte?: Aporte | null
+type MovimientoSchema = z.infer<typeof movimientoSchema>
+
+interface MovimientoFormProps {
+  movimiento?: Movimiento | null
+  tipoMovimientoInicial?: TipoMovimiento
   userEmail: string
   onSuccess: () => void
   onCancel: () => void
 }
 
-export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFormProps) {
-  const isEditing = !!aporte
+export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, onSuccess, onCancel }: MovimientoFormProps) {
+  const isEditing = !!movimiento
 
   const {
     register,
@@ -39,23 +42,34 @@ export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFor
     watch,
     formState: { errors, isSubmitting },
   } = useForm({
-    resolver: zodResolver(aporteSchema),
+    resolver: zodResolver(movimientoSchema),
     defaultValues: {
-      fecha: aporte?.fecha ?? todayISO(),
-      nombre: aporte?.nombre ?? '',
-      tipo: aporte?.tipo ?? undefined,
-      metodo_pago: aporte?.metodo_pago ?? undefined,
-      monto: aporte ? String(aporte.monto) : '',
-      observaciones: aporte?.observaciones ?? '',
+      fecha: movimiento?.fecha ?? todayISO(),
+      nombre: movimiento?.nombre ?? '',
+      tipo_movimiento: movimiento?.tipo_movimiento ?? tipoMovimientoInicial ?? 'ingreso',
+      tipo: movimiento?.tipo ?? '',
+      metodo_pago: movimiento?.metodo_pago ?? undefined,
+      monto: movimiento ? String(movimiento.monto) : '',
+      observaciones: movimiento?.observaciones ?? '',
     },
   })
 
-  async function onSubmit(data: z.infer<typeof aporteSchema>) {
+  const tipoMovimiento = watch('tipo_movimiento')
+  const esIngreso = tipoMovimiento === 'ingreso'
+  const categorias = esIngreso ? CATEGORIAS_INGRESO : CATEGORIAS_EGRESO
+
+  function cambiarDireccion(nuevo: TipoMovimiento) {
+    setValue('tipo_movimiento', nuevo)
+    setValue('tipo', '', { shouldValidate: true })
+  }
+
+  async function onSubmit(data: MovimientoSchema) {
     const supabase = createClient()
 
     const payload = {
       fecha: data.fecha,
       nombre: data.nombre.trim(),
+      tipo_movimiento: data.tipo_movimiento,
       tipo: data.tipo,
       metodo_pago: data.metodo_pago,
       monto: Number(data.monto),
@@ -67,20 +81,20 @@ export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFor
       const { error } = await supabase
         .from('finanzas')
         .update(payload)
-        .eq('id', aporte!.id)
+        .eq('id', movimiento!.id)
 
       if (error) {
-        toast.error('Error al actualizar el aporte: ' + error.message)
+        toast.error('Error al actualizar el movimiento: ' + error.message)
         return
       }
-      toast.success('Aporte actualizado correctamente')
+      toast.success('Movimiento actualizado correctamente')
     } else {
       const { error } = await supabase.from('finanzas').insert(payload)
       if (error) {
-        toast.error('Error al registrar el aporte: ' + error.message)
+        toast.error('Error al registrar el movimiento: ' + error.message)
         return
       }
-      toast.success('Aporte registrado correctamente')
+      toast.success(esIngreso ? 'Ingreso registrado correctamente' : 'Gasto registrado correctamente')
     }
 
     onSuccess()
@@ -88,6 +102,30 @@ export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFor
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+
+      {/* Dirección del movimiento */}
+      <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
+        <button
+          type="button"
+          onClick={() => cambiarDireccion('ingreso')}
+          className={cn(
+            'py-2 rounded-md text-sm font-semibold transition-all',
+            esIngreso ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          Ingreso
+        </button>
+        <button
+          type="button"
+          onClick={() => cambiarDireccion('egreso')}
+          className={cn(
+            'py-2 rounded-md text-sm font-semibold transition-all',
+            !esIngreso ? 'bg-card text-destructive shadow-sm' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          Egreso
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         {/* Fecha */}
@@ -113,12 +151,12 @@ export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFor
         </div>
       </div>
 
-      {/* Nombre */}
+      {/* Nombre / concepto */}
       <div className="space-y-1.5">
-        <Label htmlFor="nombre">Nombre del aportante *</Label>
+        <Label htmlFor="nombre">{esIngreso ? 'Nombre del aportante *' : 'Pagado a / Concepto *'}</Label>
         <Input
           id="nombre"
-          placeholder="Nombre completo..."
+          placeholder={esIngreso ? 'Nombre completo...' : 'Ej. Arrendador, proveedor...'}
           {...register('nombre')}
           className={errors.nombre ? 'border-destructive' : ''}
         />
@@ -126,20 +164,18 @@ export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFor
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Tipo */}
+        {/* Categoría */}
         <div className="space-y-1.5">
-          <Label>Tipo de aporte *</Label>
+          <Label>Categoría *</Label>
           <Select
             value={watch('tipo')}
-            onValueChange={v => setValue('tipo', v as z.infer<typeof aporteSchema>['tipo'], { shouldValidate: true })}
+            onValueChange={v => v && setValue('tipo', v, { shouldValidate: true })}
           >
             <SelectTrigger className={errors.tipo ? 'border-destructive' : ''}>
               <SelectValue placeholder="Seleccionar..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Diezmo">Diezmo</SelectItem>
-              <SelectItem value="Ofrenda">Ofrenda</SelectItem>
-              <SelectItem value="Donación">Donación especial</SelectItem>
+              {categorias.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
           {errors.tipo && <p className="text-xs text-destructive">{errors.tipo.message}</p>}
@@ -150,7 +186,7 @@ export function AporteForm({ aporte, userEmail, onSuccess, onCancel }: AporteFor
           <Label>Método de pago *</Label>
           <Select
             value={watch('metodo_pago')}
-            onValueChange={v => setValue('metodo_pago', v as z.infer<typeof aporteSchema>['metodo_pago'], { shouldValidate: true })}
+            onValueChange={v => v && setValue('metodo_pago', v as MovimientoSchema['metodo_pago'], { shouldValidate: true })}
           >
             <SelectTrigger className={errors.metodo_pago ? 'border-destructive' : ''}>
               <SelectValue placeholder="Seleccionar..." />

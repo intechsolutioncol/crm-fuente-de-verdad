@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatFecha } from '@/lib/utils/format'
-import type { Aporte, FiltrosFinanzas, TipoAporte } from '@/types'
+import { CATEGORIAS_INGRESO, CATEGORIAS_EGRESO } from '@/types'
+import type { Movimiento, FiltrosFinanzas, Categoria, TipoMovimiento } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -20,13 +21,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { AporteForm } from './AporteForm'
+import { MovimientoForm } from './MovimientoForm'
 import { ConfirmDelete } from './ConfirmDelete'
 
-const TIPO_VARIANT: Record<TipoAporte, 'default' | 'secondary' | 'outline'> = {
+const CATEGORIA_VARIANT: Record<Categoria, 'default' | 'secondary' | 'outline'> = {
   Diezmo: 'default',
   Ofrenda: 'secondary',
   Donación: 'outline',
+  Arriendo: 'outline',
+  'Servicios Públicos': 'outline',
+  Mantenimiento: 'outline',
+  'Honorarios y Pastoral': 'outline',
+  'Eventos y Logística': 'outline',
+  Otro: 'outline',
 }
 
 interface Props {
@@ -35,13 +42,13 @@ interface Props {
 }
 
 export function FinanzasLista({ userEmail, isEditor }: Props) {
-  const [aportes, setAportes] = useState<Aporte[]>([])
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
   const [filtros, setFiltros] = useState<FiltrosFinanzas>({
-    nombre: '', tipo: 'Todos', fechaInicio: '', fechaFin: '',
+    nombre: '', tipoMovimiento: 'Todos', tipo: 'Todos', fechaInicio: '', fechaFin: '',
   })
 
-  const [modalForm, setModalForm] = useState<{ open: boolean; aporte: Aporte | null }>({ open: false, aporte: null })
+  const [modalForm, setModalForm] = useState<{ open: boolean; movimiento: Movimiento | null; tipoInicial: TipoMovimiento }>({ open: false, movimiento: null, tipoInicial: 'ingreso' })
   const [modalDel, setModalDel] = useState<{ open: boolean; id: string; nombre: string }>({ open: false, id: '', nombre: '' })
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -51,13 +58,14 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
     const supabase = createClient()
     let query = supabase.from('finanzas').select('*').order('fecha', { ascending: false })
 
+    if (f.tipoMovimiento !== 'Todos') query = query.eq('tipo_movimiento', f.tipoMovimiento)
     if (f.tipo !== 'Todos') query = query.eq('tipo', f.tipo)
     if (f.fechaInicio) query = query.gte('fecha', f.fechaInicio)
     if (f.fechaFin) query = query.lte('fecha', f.fechaFin)
     if (f.nombre.trim()) query = query.ilike('nombre', `%${f.nombre.trim()}%` as string)
 
     const { data } = await query
-    setAportes((data ?? []) as Aporte[])
+    setMovimientos((data ?? []) as Movimiento[])
     setLoading(false)
   }, [])
 
@@ -75,12 +83,18 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
   }
 
   function limpiarFiltros() {
-    const vacio: FiltrosFinanzas = { nombre: '', tipo: 'Todos', fechaInicio: '', fechaFin: '' }
+    const vacio: FiltrosFinanzas = { nombre: '', tipoMovimiento: 'Todos', tipo: 'Todos', fechaInicio: '', fechaFin: '' }
     setFiltros(vacio)
     cargar(vacio)
   }
 
-  const totalFiltrado = aportes.reduce((s, a) => s + a.monto, 0)
+  function abrirNuevo(tipoInicial: TipoMovimiento) {
+    setModalForm({ open: true, movimiento: null, tipoInicial })
+  }
+
+  const totalFiltrado = movimientos.reduce(
+    (s, m) => s + (m.tipo_movimiento === 'egreso' ? -m.monto : m.monto), 0
+  )
 
   return (
     <div className="space-y-4">
@@ -99,15 +113,25 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
           />
         </div>
 
-        <Select value={filtros.tipo} onValueChange={v => onFiltro('tipo', v ?? 'Todos')}>
-          <SelectTrigger className="w-[160px]">
+        <Select value={filtros.tipoMovimiento} onValueChange={v => onFiltro('tipoMovimiento', v ?? 'Todos')}>
+          <SelectTrigger className="w-[140px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Todos">Todos los tipos</SelectItem>
-            <SelectItem value="Diezmo">Diezmo</SelectItem>
-            <SelectItem value="Ofrenda">Ofrenda</SelectItem>
-            <SelectItem value="Donación">Donación</SelectItem>
+            <SelectItem value="Todos">Ingresos y egresos</SelectItem>
+            <SelectItem value="ingreso">Ingresos</SelectItem>
+            <SelectItem value="egreso">Egresos</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filtros.tipo} onValueChange={v => onFiltro('tipo', v ?? 'Todos')}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todos">Todas las categorías</SelectItem>
+            {CATEGORIAS_INGRESO.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            {CATEGORIAS_EGRESO.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
 
@@ -129,21 +153,29 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
         <div className="flex gap-2 ml-auto">
           <Button variant="outline" size="sm" onClick={limpiarFiltros}>Limpiar</Button>
           {isEditor && (
-            <Button onClick={() => setModalForm({ open: true, aporte: null })}>
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Nuevo Aporte
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => abrirNuevo('egreso')}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Gasto
+              </Button>
+              <Button onClick={() => abrirNuevo('ingreso')}>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Ingreso
+              </Button>
+            </>
           )}
         </div>
       </div>
 
       {/* Resumen */}
-      {aportes.length > 0 && (
+      {movimientos.length > 0 && (
         <div className="flex gap-4 text-sm text-muted-foreground">
-          <span><strong className="text-foreground">{aportes.length}</strong> registros</span>
-          <span>Total filtrado: <strong className="text-primary">{formatCOP(totalFiltrado)}</strong></span>
+          <span><strong className="text-foreground">{movimientos.length}</strong> registros</span>
+          <span>Balance filtrado: <strong className={totalFiltrado < 0 ? 'text-destructive' : 'text-primary'}>{formatCOP(totalFiltrado)}</strong></span>
         </div>
       )}
 
@@ -159,7 +191,7 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40">
-                  {['Fecha', 'Nombre', 'Tipo', 'Método', 'Monto', 'Observaciones', ''].map(h => (
+                  {['Fecha', 'Nombre', 'Categoría', 'Método', 'Monto', 'Observaciones', ''].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-muted-foreground whitespace-nowrap">
                       {h}
                     </th>
@@ -167,7 +199,7 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {aportes.length === 0 ? (
+                {movimientos.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
                       <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
@@ -177,26 +209,30 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                         </svg>
                         <p className="text-sm mb-3">No hay registros con los filtros actuales.</p>
                         {isEditor && (
-                          <Button size="sm" onClick={() => setModalForm({ open: true, aporte: null })}>
-                            Registrar primer aporte
+                          <Button size="sm" onClick={() => abrirNuevo('ingreso')}>
+                            Registrar primer movimiento
                           </Button>
                         )}
                       </div>
                     </td>
                   </tr>
-                ) : aportes.map(a => (
-                  <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatFecha(a.fecha)}</td>
-                    <td className="px-4 py-3 font-semibold">{a.nombre}</td>
-                    <td className="px-4 py-3"><Badge variant={TIPO_VARIANT[a.tipo]}>{a.tipo}</Badge></td>
-                    <td className="px-4 py-3 text-xs">{a.metodo_pago}</td>
-                    <td className="px-4 py-3 font-bold text-primary whitespace-nowrap">{formatCOP(a.monto)}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px] truncate">{a.observaciones || '—'}</td>
+                ) : movimientos.map(m => {
+                  const esEgreso = m.tipo_movimiento === 'egreso'
+                  return (
+                  <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatFecha(m.fecha)}</td>
+                    <td className="px-4 py-3 font-semibold">{m.nombre}</td>
+                    <td className="px-4 py-3"><Badge variant={CATEGORIA_VARIANT[m.tipo]}>{m.tipo}</Badge></td>
+                    <td className="px-4 py-3 text-xs">{m.metodo_pago}</td>
+                    <td className={`px-4 py-3 font-bold whitespace-nowrap ${esEgreso ? 'text-destructive' : 'text-primary'}`}>
+                      {esEgreso ? '- ' : ''}{formatCOP(m.monto)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px] truncate">{m.observaciones || '—'}</td>
                     <td className="px-4 py-3">
                       {isEditor && (
                         <div className="flex gap-2 justify-end">
                           <button
-                            onClick={() => setModalForm({ open: true, aporte: a })}
+                            onClick={() => setModalForm({ open: true, movimiento: m, tipoInicial: m.tipo_movimiento })}
                             className="w-8 h-8 flex items-center justify-center rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                             title="Editar"
                           >
@@ -206,7 +242,7 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => setModalDel({ open: true, id: a.id, nombre: a.nombre })}
+                            onClick={() => setModalDel({ open: true, id: m.id, nombre: m.nombre })}
                             className="w-8 h-8 flex items-center justify-center rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
                             title="Eliminar"
                           >
@@ -219,7 +255,8 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                       )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -227,16 +264,21 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
       </div>
 
       {/* Modal: Crear / Editar */}
-      <Dialog open={modalForm.open} onOpenChange={open => !open && setModalForm({ open: false, aporte: null })}>
+      <Dialog open={modalForm.open} onOpenChange={open => !open && setModalForm({ open: false, movimiento: null, tipoInicial: 'ingreso' })}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{modalForm.aporte ? 'Editar Aporte' : 'Registrar Nuevo Aporte'}</DialogTitle>
+            <DialogTitle>
+              {modalForm.movimiento
+                ? 'Editar Movimiento'
+                : modalForm.tipoInicial === 'egreso' ? 'Registrar Gasto' : 'Registrar Ingreso'}
+            </DialogTitle>
           </DialogHeader>
-          <AporteForm
-            aporte={modalForm.aporte}
+          <MovimientoForm
+            movimiento={modalForm.movimiento}
+            tipoMovimientoInicial={modalForm.tipoInicial}
             userEmail={userEmail}
-            onSuccess={() => { setModalForm({ open: false, aporte: null }); cargar(filtros) }}
-            onCancel={() => setModalForm({ open: false, aporte: null })}
+            onSuccess={() => { setModalForm({ open: false, movimiento: null, tipoInicial: 'ingreso' }); cargar(filtros) }}
+            onCancel={() => setModalForm({ open: false, movimiento: null, tipoInicial: 'ingreso' })}
           />
         </DialogContent>
       </Dialog>

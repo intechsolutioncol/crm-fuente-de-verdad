@@ -3,27 +3,64 @@
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { formatFechaLarga, todayISO } from '@/lib/utils/format'
 
-interface Resultado {
+interface Persona {
   id: string
   nombres: string
   apellidos: string
 }
 
 type Estado =
-  | { paso: 'buscando' }
+  | { paso: 'cargando' }
+  | { paso: 'recordado'; persona: Persona }
+  | { paso: 'buscando'; aviso?: string }
   | { paso: 'confirmando'; nombre: string }
   | { paso: 'confirmado'; nombre: string; yaConfirmado: boolean }
 
+const STORAGE_KEY = 'fv_asistencia_recordado'
+
+function leerRecordado(): Persona | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function guardarRecordado(p: Persona) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(p))
+  } catch {
+    // localStorage no disponible (modo privado, etc.) — no es crítico
+  }
+}
+
+function olvidarRecordado() {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // ignorar
+  }
+}
+
 export default function AsistenciaCheckinPage() {
   const [query, setQuery] = useState('')
-  const [resultados, setResultados] = useState<Resultado[]>([])
+  const [resultados, setResultados] = useState<Persona[]>([])
   const [buscando, setBuscando] = useState(false)
-  const [estado, setEstado] = useState<Estado>({ paso: 'buscando' })
+  const [estado, setEstado] = useState<Estado>({ paso: 'cargando' })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Al cargar: si este celular ya confirmó antes, saltamos directo al paso "recordado"
   useEffect(() => {
+    const recordado = leerRecordado()
+    setEstado(recordado ? { paso: 'recordado', persona: recordado } : { paso: 'buscando' })
+  }, [])
+
+  useEffect(() => {
+    if (estado.paso !== 'buscando') return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.trim().length < 2) {
       setResultados([])
@@ -36,19 +73,32 @@ export default function AsistenciaCheckinPage() {
       setResultados(data.resultados ?? [])
       setBuscando(false)
     }, 350)
-  }, [query])
+  }, [query, estado.paso])
 
-  async function confirmar(m: Resultado) {
-    const nombreCompleto = `${m.nombres} ${m.apellidos}`
+  async function confirmar(persona: Persona) {
+    const nombreCompleto = `${persona.nombres} ${persona.apellidos}`
     setEstado({ paso: 'confirmando', nombre: nombreCompleto })
 
-    const res = await fetch('/api/asistencia/confirmar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ miembro_id: m.id }),
-    })
-    const data = await res.json()
-    setEstado({ paso: 'confirmado', nombre: nombreCompleto, yaConfirmado: !!data.yaConfirmado })
+    try {
+      const res = await fetch('/api/asistencia/confirmar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ miembro_id: persona.id }),
+      })
+      if (!res.ok) throw new Error('confirmar falló')
+      const data = await res.json()
+
+      guardarRecordado(persona) // este celular recuerda quién confirmó, para la próxima vez
+      setEstado({ paso: 'confirmado', nombre: nombreCompleto, yaConfirmado: !!data.yaConfirmado })
+    } catch {
+      olvidarRecordado()
+      setEstado({ paso: 'buscando', aviso: 'No pudimos confirmar automáticamente. Busca tu nombre para intentar de nuevo.' })
+    }
+  }
+
+  function noSoyYo() {
+    olvidarRecordado()
+    setEstado({ paso: 'buscando' })
   }
 
   function buscarOtro() {
@@ -79,7 +129,33 @@ export default function AsistenciaCheckinPage() {
 
         {/* Card */}
         <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
-          {estado.paso === 'confirmado' ? (
+          {estado.paso === 'cargando' && (
+            <div className="py-6 flex justify-center">
+              <span className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-spin" />
+            </div>
+          )}
+
+          {estado.paso === 'recordado' && (
+            <div className="text-center py-2">
+              <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+                {estado.persona.nombres.charAt(0).toUpperCase()}
+              </div>
+              <h2 className="text-lg font-bold text-foreground mb-1">
+                ¿Eres {estado.persona.nombres} {estado.persona.apellidos}?
+              </h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Toca confirmar para registrar tu asistencia de hoy.
+              </p>
+              <Button className="w-full mb-3" size="lg" onClick={() => confirmar(estado.persona)}>
+                Sí, confirmar mi asistencia
+              </Button>
+              <button onClick={noSoyYo} className="text-sm font-semibold text-muted-foreground hover:text-foreground hover:underline">
+                No soy yo
+              </button>
+            </div>
+          )}
+
+          {estado.paso === 'confirmado' && (
             <div className="text-center py-2">
               <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -101,12 +177,18 @@ export default function AsistenciaCheckinPage() {
                 Registrar a alguien más
               </button>
             </div>
-          ) : (
+          )}
+
+          {(estado.paso === 'buscando' || estado.paso === 'confirmando') && (
             <>
               <h2 className="text-lg font-semibold text-foreground mb-1">Confirma tu asistencia</h2>
               <p className="text-sm text-muted-foreground mb-6">
                 Escribe tu nombre para registrarte.
               </p>
+
+              {estado.paso === 'buscando' && estado.aviso && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">{estado.aviso}</p>
+              )}
 
               <Input
                 autoFocus

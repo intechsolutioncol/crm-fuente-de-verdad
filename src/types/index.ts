@@ -3,13 +3,14 @@ export type RolMiembro = 'Miembro Oficial' | 'Diácono' | 'Líder' | 'Pastor' | 
 export type EstadoMiembro = 'Activo' | 'Inactivo' | 'Visitante'
 
 // ── Permisos ──────────────────────────────────────────────────
-export type Modulo = 'miembros' | 'finanzas'
+export type Modulo = 'miembros' | 'finanzas' | 'asistencia'
 export type NivelPermiso = 'ninguno' | 'lector' | 'editor'
 export const ROLES_CONFIGURABLES: Exclude<RolMiembro, 'Administrador'>[] =
   ['Miembro Oficial', 'Diácono', 'Líder', 'Pastor']
 export const MODULOS_PERMISO: { id: Modulo; label: string }[] = [
   { id: 'miembros', label: 'Miembros' },
   { id: 'finanzas', label: 'Finanzas' },
+  { id: 'asistencia', label: 'Asistencia' },
 ]
 
 export interface Permiso {
@@ -109,4 +110,14 @@ export interface DashboardData {
   porCategoriaEgreso: Record<string, number>
   graficoData: { mes: string; total: number }[]
   ultimosMovimientos: Movimiento[]
+}
+
+// ── Asistencia ─────────────────────────────────────────────────
+export interface Asistencia {
+  id: string
+  miembro_id: string
+  fecha: string      // 'YYYY-MM-DD'
+  hora: string
+  metodo: 'qr' | 'manual'
+  created_at: string
 }

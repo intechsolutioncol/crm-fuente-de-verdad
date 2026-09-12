@@ -29,7 +29,10 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
-  const isPublicPath    = pathname.startsWith('/login') || pathname.startsWith('/api/auth')
+  const isPublicPath    = pathname.startsWith('/login')
+    || pathname.startsWith('/api/auth')
+    || pathname.startsWith('/asistencia/checkin')
+    || pathname.startsWith('/api/asistencia')
   const isOnboardingPath = pathname.startsWith('/onboarding')
   const onboardingDone  = user?.user_metadata?.onboarding_completed === true
 

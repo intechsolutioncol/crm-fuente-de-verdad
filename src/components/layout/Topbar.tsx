@@ -13,6 +13,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/finanzas': 'Finanzas',
   '/miembros': 'Miembros',
   '/configuracion': 'Configuración',
+  '/asistencia': 'Asistencia',
 }
 
 interface TopbarProps {

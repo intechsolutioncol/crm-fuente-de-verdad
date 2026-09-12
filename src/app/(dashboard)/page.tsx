@@ -36,7 +36,7 @@ async function getPreviewFinanzas() {
 const MODULOS = [
   { label: 'Finanzas', desc: 'Diezmos, ofrendas y donaciones', href: '/finanzas', activo: true },
   { label: 'Miembros', desc: 'Gestión de la congregación', href: '/miembros', activo: true },
-  { label: 'Asistencia', desc: 'Control de reuniones', href: '#', activo: false },
+  { label: 'Asistencia', desc: 'Check-in por QR a los servicios', href: '/asistencia', activo: true },
   { label: 'Ministerios', desc: 'Grupos y equipos de servicio', href: '#', activo: false },
   { label: 'Eventos', desc: 'Planificación de actividades', href: '#', activo: false },
   { label: 'Reportes', desc: 'Análisis e informes', href: '#', activo: false },

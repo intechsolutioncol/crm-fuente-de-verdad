@@ -118,7 +118,7 @@ $$;
 -- ================================================================
 create table if not exists fuente_verdad.permisos (
   rol    text not null,
-  modulo text not null check (modulo in ('miembros', 'finanzas')),
+  modulo text not null check (modulo in ('miembros', 'finanzas', 'asistencia')),
   nivel  text not null default 'lector' check (nivel in ('ninguno', 'lector', 'editor')),
 
   primary key (rol, modulo),
@@ -129,7 +129,7 @@ create table if not exists fuente_verdad.permisos (
 insert into fuente_verdad.permisos (rol, modulo, nivel)
 select rol, modulo, 'lector'
 from unnest(array['Miembro Oficial', 'Diácono', 'Líder', 'Pastor']) as rol
-cross join unnest(array['miembros', 'finanzas']) as modulo
+cross join unnest(array['miembros', 'finanzas', 'asistencia']) as modulo
 on conflict (rol, modulo) do nothing;
 
 create or replace function fuente_verdad.es_administrador()
@@ -348,6 +348,45 @@ create policy "finanzas_delete"
   on fuente_verdad.finanzas for delete
   to authenticated
   using (fuente_verdad.mi_permiso('finanzas') = 'editor');
+
+-- ================================================================
+-- MÓDULO ASISTENCIA
+-- Check-in por QR sin login: el registro público no pasa por estas
+-- políticas (usa el cliente admin desde /api/asistencia). Estas RLS
+-- gobiernan el uso dentro del CRM (ver reportes).
+-- ================================================================
+create table if not exists fuente_verdad.asistencia (
+  id         uuid primary key default gen_random_uuid(),
+  miembro_id uuid not null references fuente_verdad.miembros(id) on delete cascade,
+  fecha      date not null,
+  hora       timestamptz not null default now(),
+  metodo     text not null default 'qr' check (metodo in ('qr', 'manual')),
+  created_at timestamptz not null default now(),
+
+  unique (miembro_id, fecha)
+);
+
+create index if not exists idx_asistencia_fecha
+  on fuente_verdad.asistencia (fecha desc);
+create index if not exists idx_asistencia_miembro
+  on fuente_verdad.asistencia (miembro_id);
+
+alter table fuente_verdad.asistencia enable row level security;
+
+create policy "asistencia_select"
+  on fuente_verdad.asistencia for select
+  to authenticated
+  using (fuente_verdad.mi_permiso('asistencia') in ('lector', 'editor'));
+
+create policy "asistencia_insert"
+  on fuente_verdad.asistencia for insert
+  to authenticated
+  with check (fuente_verdad.mi_permiso('asistencia') = 'editor');
+
+create policy "asistencia_delete"
+  on fuente_verdad.asistencia for delete
+  to authenticated
+  using (fuente_verdad.mi_permiso('asistencia') = 'editor');
 
 -- ────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (ejecuta estas líneas por separado si quieres)

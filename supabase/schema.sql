@@ -317,6 +317,33 @@ create trigger trg_finanzas_updated_at
   before update on fuente_verdad.finanzas
   for each row execute function fuente_verdad.set_updated_at();
 
+-- ================================================================
+-- CONFIGURACIÓN DE FINANZAS
+-- Fila única, activable/desactivable desde Configuración → Módulo
+-- Finanzas. Hoy solo controla la ventana de registro de 48h.
+-- ================================================================
+create table if not exists fuente_verdad.configuracion_finanzas (
+  id                  int primary key default 1 check (id = 1),
+  exigir_registro_48h boolean not null default false
+);
+
+insert into fuente_verdad.configuracion_finanzas (id)
+values (1)
+on conflict (id) do nothing;
+
+alter table fuente_verdad.configuracion_finanzas enable row level security;
+
+create policy "configuracion_finanzas_select"
+  on fuente_verdad.configuracion_finanzas for select
+  to authenticated
+  using (fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor'));
+
+create policy "configuracion_finanzas_update"
+  on fuente_verdad.configuracion_finanzas for update
+  to authenticated
+  using (fuente_verdad.es_administrador())
+  with check (fuente_verdad.es_administrador());
+
 -- ────────────────────────────────────────────────────────────────
 -- RLS · FINANZAS
 -- ────────────────────────────────────────────────────────────────
@@ -333,11 +360,23 @@ create policy "finanzas_select"
   to authenticated
   using (fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor'));
 
--- Escritura: requiere permiso 'editor' en el módulo finanzas
+-- Escritura: requiere permiso 'editor'. Si exigir_registro_48h está
+-- activo, un movimiento nuevo solo se acepta hasta 2 días calendario
+-- después de su fecha (hora Colombia) — Administrador siempre exento.
 create policy "finanzas_insert"
   on fuente_verdad.finanzas for insert
   to authenticated
-  with check (fuente_verdad.mi_permiso('finanzas') = 'editor');
+  with check (
+    fuente_verdad.mi_permiso('finanzas') = 'editor'
+    and (
+      fuente_verdad.es_administrador()
+      or not coalesce(
+        (select exigir_registro_48h from fuente_verdad.configuracion_finanzas where id = 1),
+        false
+      )
+      or (now() at time zone 'America/Bogota')::date <= (fecha + 2)
+    )
+  );
 
 create policy "finanzas_update"
   on fuente_verdad.finanzas for update

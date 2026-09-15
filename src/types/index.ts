@@ -73,6 +73,11 @@ export interface MetodoFinanzas {
   orden: number
 }
 
+export interface ConfiguracionFinanzas {
+  id: number
+  exigir_registro_48h: boolean
+}
+
 export interface Movimiento {
   id: string
   fecha: string          // 'YYYY-MM-DD'

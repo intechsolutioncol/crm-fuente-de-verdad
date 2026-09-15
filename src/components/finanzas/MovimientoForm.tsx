@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { movimientoSchema } from '@/lib/validations/finanzas'
 import { createClient } from '@/lib/supabase/client'
 import { todayISO } from '@/lib/utils/format'
-import type { Movimiento, TipoMovimiento, CategoriaFinanzas, MetodoFinanzas } from '@/types'
+import type { Movimiento, TipoMovimiento, CategoriaFinanzas, MetodoFinanzas, ConfiguracionFinanzas } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +23,16 @@ import {
 import { toast } from 'sonner'
 
 type MovimientoSchema = z.infer<typeof movimientoSchema>
+
+// Aviso preventivo en el cliente — la regla real vive en la política
+// RLS de finanzas_insert (hora Colombia). Aquí basta una aproximación
+// con la fecha local del navegador para avisar antes de que intente guardar.
+function fueraDeVentana48h(fecha: string): boolean {
+  if (!fecha) return false
+  const limite = new Date(fecha + 'T00:00:00')
+  limite.setDate(limite.getDate() + 3) // fecha + 2 días, hasta el final de ese día
+  return new Date() >= limite
+}
 
 interface MovimientoFormProps {
   movimiento?: Movimiento | null
@@ -59,6 +69,7 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
 
   const [categoriasFinanzas, setCategoriasFinanzas] = useState<CategoriaFinanzas[]>([])
   const [metodosPago, setMetodosPago] = useState<MetodoFinanzas[]>([])
+  const [exigirRegistro48h, setExigirRegistro48h] = useState(false)
   useEffect(() => {
     const supabase = createClient()
     supabase
@@ -73,7 +84,15 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
       .eq('activo', true)
       .order('orden')
       .then(({ data }) => setMetodosPago((data ?? []) as MetodoFinanzas[]))
+    supabase
+      .from('configuracion_finanzas')
+      .select('*')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => setExigirRegistro48h((data as ConfiguracionFinanzas | null)?.exigir_registro_48h ?? false))
   }, [])
+
+  const fechaFueraDeVentana = !isEditing && exigirRegistro48h && fueraDeVentana48h(watch('fecha'))
 
   const categorias = categoriasFinanzas
     .filter(c => c.tipo_movimiento === tipoMovimiento)
@@ -112,7 +131,11 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
     } else {
       const { error } = await supabase.from('finanzas').insert(payload)
       if (error) {
-        toast.error('Error al registrar el movimiento: ' + error.message)
+        if (error.code === '42501') {
+          toast.error('No se pudo registrar: la fecha ya superó la ventana de 48 horas. Pide a un Administrador que la registre.')
+        } else {
+          toast.error('Error al registrar el movimiento: ' + error.message)
+        }
         return
       }
       toast.success(esIngreso ? 'Ingreso registrado correctamente' : 'Gasto registrado correctamente')
@@ -154,6 +177,11 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
           <Label htmlFor="fecha">Fecha *</Label>
           <Input id="fecha" type="date" {...register('fecha')} className={errors.fecha ? 'border-destructive' : ''} />
           {errors.fecha && <p className="text-xs text-destructive">{errors.fecha.message}</p>}
+          {!errors.fecha && fechaFueraDeVentana && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Esta fecha ya superó la ventana de 48 horas. Solo un Administrador puede registrarla.
+            </p>
+          )}
         </div>
 
         {/* Monto */}

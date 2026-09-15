@@ -6,6 +6,12 @@ import { formatFechaLarga } from '@/lib/utils/format'
 import type { Ministerio, PublicacionMinisterio } from '@/types'
 
 const BUCKET = 'publicaciones-ministerios'
+const LARGO_EXTRACTO = 220
+
+function extracto(texto: string) {
+  if (texto.length <= LARGO_EXTRACTO) return texto
+  return texto.slice(0, LARGO_EXTRACTO).trimEnd() + '…'
+}
 
 export default async function MinisterioBlogPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -52,7 +58,11 @@ export default async function MinisterioBlogPage({ params }: { params: Promise<{
               Todavía no hay publicaciones en este ministerio.
             </p>
           ) : ((publicaciones ?? []) as PublicacionMinisterio[]).map(p => (
-            <article key={p.id} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+            <Link
+              key={p.id}
+              href={`/ministerios/${slug}/${p.id}`}
+              className="block bg-card border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-primary/40 transition-all"
+            >
               {p.imagen_path && (
                 <div className="relative w-full aspect-video bg-muted">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -62,9 +72,10 @@ export default async function MinisterioBlogPage({ params }: { params: Promise<{
               <div className="p-6">
                 <p className="text-xs text-muted-foreground mb-1 capitalize">{formatFechaLarga(p.created_at.slice(0, 10))}</p>
                 <h2 className="text-lg font-bold text-foreground mb-2">{p.titulo}</h2>
-                <p className="text-sm text-foreground/90 whitespace-pre-wrap">{p.contenido}</p>
+                <p className="text-sm text-foreground/90 whitespace-pre-wrap">{extracto(p.contenido)}</p>
+                <span className="inline-block mt-3 text-xs font-semibold text-primary">Leer más →</span>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       </div>

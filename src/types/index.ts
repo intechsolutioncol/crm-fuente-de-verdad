@@ -197,6 +197,7 @@ export interface PublicacionMinisterio {
   contenido: string
   imagen_path: string | null
   autor_id: string | null
+  vistas_count: number
   created_at: string
   updated_at: string
 }

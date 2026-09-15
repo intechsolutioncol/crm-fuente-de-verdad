@@ -733,6 +733,7 @@ create table if not exists fuente_verdad.publicaciones_ministerio (
   contenido     text not null check (char_length(contenido) >= 1),
   imagen_path   text,
   autor_id      uuid references fuente_verdad.miembros(id) on delete set null,
+  vistas_count  integer not null default 0,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
@@ -767,6 +768,21 @@ create policy "publicaciones_ministerio_delete"
   on fuente_verdad.publicaciones_ministerio for delete
   to authenticated
   using (fuente_verdad.puede_gestionar_ministerio(ministerio_id));
+
+-- Incremento atómico de vistas (Fase 4 de Reportes). Se llama desde
+-- el detalle público de una publicación vía el cliente admin.
+create or replace function fuente_verdad.incrementar_vista_publicacion(p_publicacion_id uuid)
+returns void
+language sql
+security definer
+set search_path = fuente_verdad
+as $$
+  update fuente_verdad.publicaciones_ministerio
+  set vistas_count = vistas_count + 1
+  where id = p_publicacion_id;
+$$;
+
+grant execute on function fuente_verdad.incrementar_vista_publicacion(uuid) to anon, authenticated, service_role;
 
 -- Bucket PÚBLICO (a diferencia de comprobantes-finanzas): el blog ya
 -- es público, las imágenes se sirven con URL pública estable.

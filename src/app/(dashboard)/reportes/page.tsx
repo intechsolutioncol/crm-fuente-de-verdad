@@ -48,7 +48,7 @@ const ACCESOS = [
   { label: 'Finanzas', desc: 'Dashboard, categorías y movimientos', href: '/finanzas' },
   { label: 'Miembros', desc: 'Crecimiento, distribución y edades', href: '/reportes/miembros' },
   { label: 'Asistencia', desc: 'Tendencia, miembros vs. visitantes y alertas', href: '/reportes/asistencia' },
-  { label: 'Ministerios', desc: 'Publicaciones por ministerio', href: '/mis-ministerios' },
+  { label: 'Ministerios', desc: 'Vistas, ranking y publicaciones más leídas', href: '/reportes/ministerios' },
 ]
 
 export default async function ReportesPage() {

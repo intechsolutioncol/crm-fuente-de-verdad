@@ -47,7 +47,7 @@ async function getResumen() {
 const ACCESOS = [
   { label: 'Finanzas', desc: 'Dashboard, categorías y movimientos', href: '/finanzas' },
   { label: 'Miembros', desc: 'Crecimiento, distribución y edades', href: '/reportes/miembros' },
-  { label: 'Asistencia', desc: 'Conteo por domingo y visitantes', href: '/asistencia' },
+  { label: 'Asistencia', desc: 'Tendencia, miembros vs. visitantes y alertas', href: '/reportes/asistencia' },
   { label: 'Ministerios', desc: 'Publicaciones por ministerio', href: '/mis-ministerios' },
 ]
 

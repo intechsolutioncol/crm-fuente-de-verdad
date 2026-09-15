@@ -1,21 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
-import { calcEdad } from '@/lib/utils/format'
-import type { Miembro } from '@/types'
-
-const NOMBRES_MES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-const ROLES_ORDEN = ['Administrador', 'Pastor', 'Líder', 'Diácono', 'Miembro Oficial']
-const ESTADOS_ORDEN = ['Activo', 'Inactivo', 'Visitante']
-const RANGOS_EDAD = [
-  { label: '0-12', min: 0, max: 12 },
-  { label: '13-17', min: 13, max: 17 },
-  { label: '18-25', min: 18, max: 25 },
-  { label: '26-35', min: 26, max: 35 },
-  { label: '36-50', min: 36, max: 50 },
-  { label: '51-65', min: 51, max: 65 },
-  { label: '66+', min: 66, max: 200 },
-]
+import { ExportButtons } from '@/components/reportes/ExportButtons'
+import { getMiembrosData, VENTANAS_MESES } from '@/lib/reportes/miembros'
 
 function CrecimientoChart({ data }: { data: { mes: string; total: number }[] }) {
   const W = 640, H = 200
@@ -59,7 +46,19 @@ function BarraDistribucion({ label, valor, total, color }: { label: string; valo
   )
 }
 
-export default async function ReportesMiembrosPage() {
+function DeltaBadge({ pct }: { pct: number | null }) {
+  if (pct === null) return <span className="text-xs text-muted-foreground">Sin datos del año anterior</span>
+  const positivo = pct >= 0
+  return (
+    <span className={`text-xs font-bold ${positivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+      {positivo ? '▲' : '▼'} {Math.abs(pct)}% vs. año anterior
+    </span>
+  )
+}
+
+const COLOR_ESTADO: Record<string, string> = { Activo: 'hsl(var(--primary))', Inactivo: 'hsl(var(--destructive))', Visitante: 'hsl(var(--chart-3))' }
+
+export default async function ReportesMiembrosPage({ searchParams }: { searchParams: Promise<{ meses?: string }> }) {
   const supabase = await createClient()
   const { data: esAdmin } = await supabase.rpc('es_administrador')
 
@@ -71,66 +70,65 @@ export default async function ReportesMiembrosPage() {
     )
   }
 
-  const { data } = await supabase.from('miembros').select('*')
-  const miembros = (data ?? []) as Miembro[]
-  const total = miembros.length
+  const { meses: mesesParam } = await searchParams
+  const meses = VENTANAS_MESES.includes(Number(mesesParam) as (typeof VENTANAS_MESES)[number]) ? Number(mesesParam) : 12
 
-  // Crecimiento por mes (últimos 12 meses, por fecha de registro)
-  const hoy = new Date()
-  const porMes = new Map<string, number>()
-  for (const m of miembros) {
-    const clave = m.created_at.slice(0, 7) // 'YYYY-MM'
-    porMes.set(clave, (porMes.get(clave) ?? 0) + 1)
-  }
-  const crecimiento = Array.from({ length: 12 }, (_, i) => {
-    const d = new Date(hoy.getFullYear(), hoy.getMonth() - (11 - i), 1)
-    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    return { mes: NOMBRES_MES[d.getMonth()], total: porMes.get(clave) ?? 0 }
-  })
-
-  // Distribución por rol
-  const porRol = ROLES_ORDEN.map(rol => ({ rol, valor: miembros.filter(m => m.rol === rol).length }))
-
-  // Distribución por estado
-  const porEstado = ESTADOS_ORDEN.map(estado => ({ estado, valor: miembros.filter(m => m.estado === estado).length }))
-  const COLOR_ESTADO: Record<string, string> = { Activo: 'hsl(var(--primary))', Inactivo: 'hsl(var(--destructive))', Visitante: 'hsl(var(--chart-3))' }
-
-  // Distribución por país / departamento
-  const porPais = new Map<string, number>()
-  const porDepartamento = new Map<string, number>()
-  for (const m of miembros) {
-    porPais.set(m.pais, (porPais.get(m.pais) ?? 0) + 1)
-    if (m.pais === 'Colombia' && m.departamento) {
-      porDepartamento.set(m.departamento, (porDepartamento.get(m.departamento) ?? 0) + 1)
-    }
-  }
-  const paisesOrdenados = Array.from(porPais.entries()).sort((a, b) => b[1] - a[1])
-  const departamentosOrdenados = Array.from(porDepartamento.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8)
-
-  // Pirámide de edades
-  const porEdad = RANGOS_EDAD.map(r => ({
-    label: r.label,
-    valor: miembros.filter(m => {
-      const edad = calcEdad(m.fecha_nacimiento)
-      return edad >= r.min && edad <= r.max
-    }).length,
-  }))
+  const d = await getMiembrosData(supabase, { meses })
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Reportes de Miembros</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Crecimiento y composición de la congregación</p>
         </div>
-        <Link href="/reportes" className="text-xs font-semibold text-primary hover:underline">← Reportes</Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href="/reportes" className="text-xs font-semibold text-primary hover:underline">← Reportes</Link>
+          <ExportButtons modulo="miembros" params={{ meses: String(meses) }} />
+        </div>
+      </div>
+
+      {/* KPIs + comparativa */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card border border-border rounded-xl p-5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Total de miembros</p>
+          <p className="text-2xl font-extrabold text-primary leading-none">{d.total}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Nuevos este año</p>
+          <p className="text-2xl font-extrabold text-primary leading-none mb-1">{d.nuevosEsteAnio}</p>
+          <DeltaBadge pct={d.deltaPct} />
+        </div>
+        <div className="bg-card border border-border rounded-xl p-5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Nuevos año anterior</p>
+          <p className="text-2xl font-extrabold text-primary leading-none">{d.nuevosAnioAnterior}</p>
+        </div>
       </div>
 
       {/* Crecimiento */}
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-        <p className="text-sm font-bold text-foreground mb-0.5">Crecimiento de la membresía</p>
-        <p className="text-xs text-muted-foreground mb-4">Miembros nuevos por mes — últimos 12 meses</p>
-        <CrecimientoChart data={crecimiento} />
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div>
+            <p className="text-sm font-bold text-foreground mb-0.5">Crecimiento de la membresía</p>
+            <p className="text-xs text-muted-foreground">Miembros nuevos por mes — últimos {meses} meses</p>
+          </div>
+          <form method="get" className="flex items-center gap-1.5">
+            {VENTANAS_MESES.map(v => (
+              <button
+                key={v}
+                type="submit"
+                name="meses"
+                value={v}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-md border transition-colors ${
+                  v === meses ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground hover:border-primary hover:text-primary'
+                }`}
+              >
+                {v}m
+              </button>
+            ))}
+          </form>
+        </div>
+        <CrecimientoChart data={d.crecimiento} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -138,8 +136,8 @@ export default async function ReportesMiembrosPage() {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-bold text-foreground mb-4">Distribución por rol</p>
           <div className="space-y-3">
-            {porRol.map(r => (
-              <BarraDistribucion key={r.rol} label={r.rol} valor={r.valor} total={total} color="hsl(var(--primary))" />
+            {d.porRol.map(r => (
+              <BarraDistribucion key={r.rol} label={r.rol} valor={r.valor} total={d.total} color="hsl(var(--primary))" />
             ))}
           </div>
         </div>
@@ -148,8 +146,8 @@ export default async function ReportesMiembrosPage() {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-bold text-foreground mb-4">Distribución por estado</p>
           <div className="space-y-3">
-            {porEstado.map(e => (
-              <BarraDistribucion key={e.estado} label={e.estado} valor={e.valor} total={total} color={COLOR_ESTADO[e.estado]} />
+            {d.porEstado.map(e => (
+              <BarraDistribucion key={e.estado} label={e.estado} valor={e.valor} total={d.total} color={COLOR_ESTADO[e.estado]} />
             ))}
           </div>
         </div>
@@ -158,10 +156,10 @@ export default async function ReportesMiembrosPage() {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-bold text-foreground mb-4">Distribución por país</p>
           <div className="space-y-3">
-            {paisesOrdenados.map(([pais, valor]) => (
-              <BarraDistribucion key={pais} label={pais} valor={valor} total={total} color="hsl(var(--chart-2))" />
+            {d.paisesOrdenados.map(([pais, valor]) => (
+              <BarraDistribucion key={pais} label={pais} valor={valor} total={d.total} color="hsl(var(--chart-2))" />
             ))}
-            {paisesOrdenados.length === 0 && <p className="text-sm text-muted-foreground">Sin datos todavía.</p>}
+            {d.paisesOrdenados.length === 0 && <p className="text-sm text-muted-foreground">Sin datos todavía.</p>}
           </div>
         </div>
 
@@ -169,10 +167,10 @@ export default async function ReportesMiembrosPage() {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <p className="text-sm font-bold text-foreground mb-4">Departamentos (Colombia)</p>
           <div className="space-y-3">
-            {departamentosOrdenados.map(([depto, valor]) => (
-              <BarraDistribucion key={depto} label={depto} valor={valor} total={total} color="hsl(var(--chart-3))" />
+            {d.departamentosOrdenados.map(([depto, valor]) => (
+              <BarraDistribucion key={depto} label={depto} valor={valor} total={d.total} color="hsl(var(--chart-3))" />
             ))}
-            {departamentosOrdenados.length === 0 && <p className="text-sm text-muted-foreground">Sin datos todavía.</p>}
+            {d.departamentosOrdenados.length === 0 && <p className="text-sm text-muted-foreground">Sin datos todavía.</p>}
           </div>
         </div>
       </div>
@@ -181,8 +179,8 @@ export default async function ReportesMiembrosPage() {
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
         <p className="text-sm font-bold text-foreground mb-4">Distribución por edad</p>
         <div className="space-y-3">
-          {porEdad.map(e => (
-            <BarraDistribucion key={e.label} label={`${e.label} años`} valor={e.valor} total={total} color="hsl(var(--primary))" />
+          {d.porEdad.map(e => (
+            <BarraDistribucion key={e.label} label={`${e.label} años`} valor={e.valor} total={d.total} color="hsl(var(--primary))" />
           ))}
         </div>
       </div>

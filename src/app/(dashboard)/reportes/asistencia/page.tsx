@@ -1,24 +1,33 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
+import { ExportButtons } from '@/components/reportes/ExportButtons'
+import { getAsistenciaData, DIAS_VENTANA_ALERTA, UMBRAL_AUSENCIA_DIAS } from '@/lib/reportes/asistencia'
 import { formatFecha } from '@/lib/utils/format'
-import type { Miembro } from '@/types'
-
-const DIAS_VENTANA = 180
-const UMBRAL_AUSENCIA_DIAS = 21 // 3 domingos
 
 function formatCorto(fecha: string) {
   const [, m, d] = fecha.split('-')
   return `${d}/${m}`
 }
 
-function diasDesde(fecha: string) {
-  const [y, m, d] = fecha.split('-').map(Number)
-  const inicio = new Date(y, m - 1, d)
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  inicio.setHours(0, 0, 0, 0)
-  return Math.round((hoy.getTime() - inicio.getTime()) / 86_400_000)
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function haceNDias(n: number) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toISOString().slice(0, 10)
+}
+
+function DeltaBadge({ pct }: { pct: number | null }) {
+  if (pct === null) return <span className="text-xs text-muted-foreground">Sin datos del año anterior</span>
+  const positivo = pct >= 0
+  return (
+    <span className={`text-xs font-bold ${positivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+      {positivo ? '▲' : '▼'} {Math.abs(pct)}% vs. mismo rango año anterior
+    </span>
+  )
 }
 
 function TendenciaChart({ data }: { data: { fecha: string; miembros: number; visitantes: number }[] }) {
@@ -69,7 +78,7 @@ function TendenciaChart({ data }: { data: { fecha: string; miembros: number; vis
   )
 }
 
-export default async function ReportesAsistenciaPage() {
+export default async function ReportesAsistenciaPage({ searchParams }: { searchParams: Promise<{ desde?: string; hasta?: string }> }) {
   const supabase = await createClient()
   const { data: esAdmin } = await supabase.rpc('es_administrador')
 
@@ -81,70 +90,45 @@ export default async function ReportesAsistenciaPage() {
     )
   }
 
-  const desde = new Date()
-  desde.setDate(desde.getDate() - DIAS_VENTANA)
-  const desdeISO = desde.toISOString().slice(0, 10)
+  const sp = await searchParams
+  const desde = sp.desde || haceNDias(DIAS_VENTANA_ALERTA)
+  const hasta = sp.hasta || hoyISO()
 
-  const [{ data: asistenciaData }, { data: miembrosData }] = await Promise.all([
-    supabase.from('asistencia').select('miembro_id, visitante_id, fecha').gte('fecha', desdeISO),
-    supabase.from('miembros').select('*').eq('estado', 'Activo'),
-  ])
-
-  const asistencia = asistenciaData ?? []
-  const activos = (miembrosData ?? []) as Miembro[]
-
-  // Tendencia por domingo (últimos 10 domingos con datos) + miembros vs visitantes
-  const porFecha = new Map<string, { miembros: number; visitantes: number }>()
-  for (const a of asistencia) {
-    const actual = porFecha.get(a.fecha) ?? { miembros: 0, visitantes: 0 }
-    if (a.miembro_id) actual.miembros++
-    if (a.visitante_id) actual.visitantes++
-    porFecha.set(a.fecha, actual)
-  }
-  const tendencia = Array.from(porFecha.entries())
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .slice(-10)
-    .map(([fecha, v]) => ({ fecha, ...v }))
-
-  const totalConfirmaciones = asistencia.length
-  const totalMiembros = asistencia.filter(a => a.miembro_id).length
-  const totalVisitantes = asistencia.filter(a => a.visitante_id).length
-  const promedioPorDomingo = porFecha.size > 0 ? Math.round(totalConfirmaciones / porFecha.size) : 0
-
-  // Última asistencia por miembro activo (dentro de la ventana)
-  const ultimaPorMiembro = new Map<string, string>()
-  for (const a of asistencia) {
-    if (!a.miembro_id) continue
-    const actual = ultimaPorMiembro.get(a.miembro_id)
-    if (!actual || a.fecha > actual) ultimaPorMiembro.set(a.miembro_id, a.fecha)
-  }
-
-  const alertaInasistencia = activos
-    .map(m => {
-      const ultima = ultimaPorMiembro.get(m.id) ?? null
-      const dias = ultima ? diasDesde(ultima) : null
-      return { miembro: m, ultima, dias }
-    })
-    .filter(x => x.dias === null || x.dias >= UMBRAL_AUSENCIA_DIAS)
-    .sort((a, b) => (b.dias ?? Infinity) - (a.dias ?? Infinity))
+  const d = await getAsistenciaData(supabase, { desde, hasta })
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Reportes de Asistencia</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Tendencia y seguimiento de asistencia — últimos {DIAS_VENTANA} días</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Tendencia y seguimiento de asistencia</p>
         </div>
-        <Link href="/reportes" className="text-xs font-semibold text-primary hover:underline">← Reportes</Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link href="/reportes" className="text-xs font-semibold text-primary hover:underline">← Reportes</Link>
+          <ExportButtons modulo="asistencia" params={{ desde, hasta }} />
+        </div>
       </div>
+
+      {/* Filtro de fecha */}
+      <form method="get" className="flex items-center gap-2 flex-wrap bg-card border border-border rounded-xl p-4">
+        <label htmlFor="desde" className="text-xs font-medium text-muted-foreground">Desde</label>
+        <input type="date" id="desde" name="desde" defaultValue={desde} max={hasta}
+          className="text-sm px-2 py-1 rounded-md border border-input bg-transparent outline-none focus:ring-2 focus:ring-ring/50" />
+        <label htmlFor="hasta" className="text-xs font-medium text-muted-foreground">Hasta</label>
+        <input type="date" id="hasta" name="hasta" defaultValue={hasta} max={hoyISO()}
+          className="text-sm px-2 py-1 rounded-md border border-input bg-transparent outline-none focus:ring-2 focus:ring-ring/50" />
+        <button type="submit" className="text-xs font-semibold px-3 py-1.5 rounded-md border border-border hover:border-primary hover:text-primary transition-colors">
+          Aplicar
+        </button>
+      </form>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Confirmaciones', value: totalConfirmaciones },
-          { label: 'Miembros', value: totalMiembros },
-          { label: 'Visitantes', value: totalVisitantes },
-          { label: 'Promedio por domingo', value: promedioPorDomingo },
+          { label: 'Confirmaciones', value: d.totalConfirmaciones },
+          { label: 'Miembros', value: d.totalMiembros },
+          { label: 'Visitantes', value: d.totalVisitantes },
+          { label: 'Promedio por domingo', value: d.promedioPorDomingo },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card border border-border rounded-xl p-5">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
@@ -153,14 +137,19 @@ export default async function ReportesAsistenciaPage() {
         ))}
       </div>
 
+      <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs text-muted-foreground">Mismo rango, año anterior: <span className="font-bold text-foreground">{d.totalMismoRangoAnioAnterior}</span> confirmaciones</p>
+        <DeltaBadge pct={d.deltaPct} />
+      </div>
+
       {/* Tendencia */}
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
         <p className="text-sm font-bold text-foreground mb-0.5">Tendencia de asistencia</p>
-        <p className="text-xs text-muted-foreground mb-4">Miembros vs. visitantes — últimos {tendencia.length} domingos con datos</p>
-        {tendencia.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">Aún no hay confirmaciones registradas.</p>
+        <p className="text-xs text-muted-foreground mb-4">Miembros vs. visitantes — últimos {d.tendencia.length} domingos con datos en el rango</p>
+        {d.tendencia.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">No hay confirmaciones registradas en este rango.</p>
         ) : (
-          <TendenciaChart data={tendencia} />
+          <TendenciaChart data={d.tendencia} />
         )}
       </div>
 
@@ -169,10 +158,10 @@ export default async function ReportesAsistenciaPage() {
         <div className="px-6 py-4 border-b border-border">
           <p className="text-sm font-bold text-foreground">Alerta de inasistencia</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Miembros activos sin confirmar asistencia en {UMBRAL_AUSENCIA_DIAS}+ días
+            Miembros activos sin confirmar asistencia en {UMBRAL_AUSENCIA_DIAS}+ días (independiente del filtro de fecha)
           </p>
         </div>
-        {alertaInasistencia.length === 0 ? (
+        {d.alertaInasistencia.length === 0 ? (
           <p className="px-6 py-8 text-sm text-muted-foreground text-center">
             Todos los miembros activos han asistido recientemente. 🎉
           </p>
@@ -189,17 +178,17 @@ export default async function ReportesAsistenciaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {alertaInasistencia.map(({ miembro, ultima, dias }) => (
+                {d.alertaInasistencia.map(({ miembro, ultima, dias }) => (
                   <tr key={miembro.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">
                       {miembro.nombres} {miembro.apellidos}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {ultima ? formatFecha(ultima) : `Sin registro (${DIAS_VENTANA}+ días)`}
+                      {ultima ? formatFecha(ultima) : `Sin registro (${DIAS_VENTANA_ALERTA}+ días)`}
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                        {dias === null ? `${DIAS_VENTANA}+` : dias} días
+                        {dias === null ? `${DIAS_VENTANA_ALERTA}+` : dias} días
                       </span>
                     </td>
                   </tr>

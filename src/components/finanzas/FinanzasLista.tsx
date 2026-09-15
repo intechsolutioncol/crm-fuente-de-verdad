@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCOP, formatFecha } from '@/lib/utils/format'
+import { urlComprobante } from '@/lib/utils/comprobantes'
 import type { Movimiento, FiltrosFinanzas, TipoMovimiento, CategoriaFinanzas } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -91,6 +92,11 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
 
   function abrirNuevo(tipoInicial: TipoMovimiento) {
     setModalForm({ open: true, movimiento: null, tipoInicial })
+  }
+
+  async function verComprobante(path: string) {
+    const url = await urlComprobante(path)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   const totalFiltrado = movimientos.reduce(
@@ -229,8 +235,22 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px] truncate">{m.observaciones || '—'}</td>
                     <td className="px-4 py-3">
+                      <div className="flex gap-2 justify-end">
+                        {m.comprobante_path && (
+                          <button
+                            onClick={() => verComprobante(m.comprobante_path!)}
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-muted text-muted-foreground hover:bg-muted/70 transition-colors"
+                            title="Ver comprobante"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                          </button>
+                        )}
                       {isEditor && (
-                        <div className="flex gap-2 justify-end">
+                        <>
                           <button
                             onClick={() => setModalForm({ open: true, movimiento: m, tipoInicial: m.tipo_movimiento })}
                             className="w-8 h-8 flex items-center justify-center rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
@@ -251,8 +271,9 @@ export function FinanzasLista({ userEmail, isEditor }: Props) {
                               <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
                             </svg>
                           </button>
-                        </div>
+                        </>
                       )}
+                      </div>
                     </td>
                   </tr>
                   )

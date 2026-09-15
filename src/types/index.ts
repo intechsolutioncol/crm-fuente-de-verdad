@@ -87,6 +87,7 @@ export interface Movimiento {
   metodo_pago: string     // nombre de fuente_verdad.metodos_pago
   monto: number
   observaciones: string
+  comprobante_path: string | null
   user_email: string
   created_at: string
   updated_at: string

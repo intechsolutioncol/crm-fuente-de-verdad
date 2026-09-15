@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { movimientoSchema } from '@/lib/validations/finanzas'
 import { createClient } from '@/lib/supabase/client'
 import { todayISO } from '@/lib/utils/format'
+import { subirComprobante, urlComprobante } from '@/lib/utils/comprobantes'
 import type { Movimiento, TipoMovimiento, CategoriaFinanzas, MetodoFinanzas, ConfiguracionFinanzas } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -94,6 +95,14 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
 
   const fechaFueraDeVentana = !isEditing && exigirRegistro48h && fueraDeVentana48h(watch('fecha'))
 
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [comprobanteExistenteUrl, setComprobanteExistenteUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (movimiento?.comprobante_path) {
+      urlComprobante(movimiento.comprobante_path).then(setComprobanteExistenteUrl)
+    }
+  }, [movimiento?.comprobante_path])
+
   const categorias = categoriasFinanzas
     .filter(c => c.tipo_movimiento === tipoMovimiento)
     .map(c => c.nombre)
@@ -104,7 +113,25 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
   }
 
   async function onSubmit(data: MovimientoSchema) {
+    const tieneComprobante = !!archivo || !!comprobanteExistenteUrl
+    if (data.metodo_pago === 'Bold' && !tieneComprobante) {
+      const continuar = window.confirm(
+        'Pagaste con Bold pero no adjuntaste una imagen de soporte. ¿Deseas guardar de todas formas?'
+      )
+      if (!continuar) return
+    }
+
     const supabase = createClient()
+
+    let comprobantePath: string | undefined
+    if (archivo) {
+      try {
+        comprobantePath = await subirComprobante(archivo)
+      } catch {
+        toast.error('No se pudo subir la imagen de soporte. Intenta de nuevo.')
+        return
+      }
+    }
 
     const payload = {
       fecha: data.fecha,
@@ -115,6 +142,7 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
       monto: Number(data.monto),
       observaciones: (data.observaciones ?? '').trim(),
       user_email: userEmail,
+      ...(comprobantePath ? { comprobante_path: comprobantePath } : {}),
     }
 
     if (isEditing) {
@@ -257,6 +285,31 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
           placeholder="Notas adicionales (opcional)..."
           {...register('observaciones')}
         />
+      </div>
+
+      {/* Comprobante (imagen de soporte) */}
+      <div className="space-y-1.5">
+        <Label htmlFor="comprobante">Imagen de soporte (opcional)</Label>
+        <Input
+          id="comprobante"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={e => setArchivo(e.target.files?.[0] ?? null)}
+        />
+        {archivo && (
+          <p className="text-xs text-muted-foreground">Nueva imagen seleccionada: {archivo.name}</p>
+        )}
+        {!archivo && comprobanteExistenteUrl && (
+          <a
+            href={comprobanteExistenteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            Ver comprobante actual
+          </a>
+        )}
       </div>
 
       {/* Footer */}

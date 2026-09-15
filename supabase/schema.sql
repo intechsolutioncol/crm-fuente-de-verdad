@@ -233,9 +233,10 @@ create table if not exists fuente_verdad.categorias_finanzas (
 );
 
 insert into fuente_verdad.categorias_finanzas (tipo_movimiento, nombre, orden) values
-  ('ingreso', 'Diezmo', 1), ('ingreso', 'Ofrenda', 2), ('ingreso', 'Donación', 3),
+  ('ingreso', 'Diezmos', 1), ('ingreso', 'Ofrendas', 2), ('ingreso', 'Votos', 4), ('ingreso', 'Primicias', 5),
   ('egreso', 'Arriendo', 1), ('egreso', 'Servicios Públicos', 2), ('egreso', 'Mantenimiento', 3),
-  ('egreso', 'Honorarios y Pastoral', 4), ('egreso', 'Eventos y Logística', 5), ('egreso', 'Otro', 6)
+  ('egreso', 'Honorarios y Pastoral', 4), ('egreso', 'Eventos y Logística', 5), ('egreso', 'Otro', 6),
+  ('egreso', 'Diezmos de Diezmos', 7)
 on conflict (tipo_movimiento, nombre) do nothing;
 
 alter table fuente_verdad.categorias_finanzas enable row level security;
@@ -263,6 +264,45 @@ create policy "categorias_finanzas_update"
   with check (fuente_verdad.es_administrador());
 
 -- ================================================================
+-- MÉTODOS DE PAGO
+-- Configurables desde /configuracion, mismo patrón que categorías:
+-- nunca se borran (solo se desactivan) para no romper el historial.
+-- ================================================================
+create table if not exists fuente_verdad.metodos_pago (
+  id         uuid primary key default gen_random_uuid(),
+  nombre     text not null unique,
+  activo     boolean not null default true,
+  orden      int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+insert into fuente_verdad.metodos_pago (nombre, activo, orden) values
+  ('Bold', true, 1), ('Efectivo', true, 2)
+on conflict (nombre) do nothing;
+
+alter table fuente_verdad.metodos_pago enable row level security;
+
+drop policy if exists "metodos_pago_select" on fuente_verdad.metodos_pago;
+drop policy if exists "metodos_pago_insert" on fuente_verdad.metodos_pago;
+drop policy if exists "metodos_pago_update" on fuente_verdad.metodos_pago;
+
+create policy "metodos_pago_select"
+  on fuente_verdad.metodos_pago for select
+  to authenticated
+  using (fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor'));
+
+create policy "metodos_pago_insert"
+  on fuente_verdad.metodos_pago for insert
+  to authenticated
+  with check (fuente_verdad.es_administrador());
+
+create policy "metodos_pago_update"
+  on fuente_verdad.metodos_pago for update
+  to authenticated
+  using (fuente_verdad.es_administrador())
+  with check (fuente_verdad.es_administrador());
+
+-- ================================================================
 -- MÓDULO FINANZAS
 -- ================================================================
 create table if not exists fuente_verdad.finanzas (
@@ -274,6 +314,7 @@ create table if not exists fuente_verdad.finanzas (
   metodo_pago     text        not null,
   monto           numeric(14, 0) not null,
   observaciones   text        not null default '',
+  comprobante_path text,      -- ruta en el bucket privado comprobantes-finanzas (opcional)
   user_email      text        not null,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
@@ -285,7 +326,10 @@ create table if not exists fuente_verdad.finanzas (
   constraint finanzas_tipo_fk foreign key (tipo_movimiento, tipo)
     references fuente_verdad.categorias_finanzas (tipo_movimiento, nombre)
     on update cascade,
-  constraint finanzas_metodo_valido  check (metodo_pago in ('Efectivo', 'Transferencia', 'Otro')),
+  -- El método de pago debe existir en metodos_pago (mismo mecanismo que la categoría)
+  constraint finanzas_metodo_fk foreign key (metodo_pago)
+    references fuente_verdad.metodos_pago (nombre)
+    on update cascade,
   constraint finanzas_monto_positivo check (monto > 0)
 );
 
@@ -460,6 +504,39 @@ create policy "asistencia_delete"
   on fuente_verdad.asistencia for delete
   to authenticated
   using (fuente_verdad.mi_permiso('asistencia') = 'editor');
+
+-- ================================================================
+-- COMPROBANTES DE FINANZAS (Storage)
+-- Bucket privado — las imágenes se sirven con signed URLs de corta
+-- vida, no con un link público permanente.
+-- ================================================================
+insert into storage.buckets (id, name, public)
+values ('comprobantes-finanzas', 'comprobantes-finanzas', false)
+on conflict (id) do nothing;
+
+create policy "comprobantes_finanzas_insert"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'comprobantes-finanzas'
+    and fuente_verdad.mi_permiso('finanzas') = 'editor'
+  );
+
+create policy "comprobantes_finanzas_select"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'comprobantes-finanzas'
+    and fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor')
+  );
+
+create policy "comprobantes_finanzas_delete"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'comprobantes-finanzas'
+    and fuente_verdad.mi_permiso('finanzas') = 'editor'
+  );
 
 -- ────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (ejecuta estas líneas por separado si quieres)

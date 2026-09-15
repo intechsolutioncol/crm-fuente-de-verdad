@@ -31,6 +31,12 @@ alter default privileges in schema fuente_verdad
 -- Se instala a nivel de base de datos, no por schema — no requiere cambios.
 create extension if not exists pg_trgm;
 
+-- Extensión para tareas programadas (egreso automático de Diezmos de
+-- Diezmos). En algunos planes de Supabase debe activarse primero desde
+-- el Dashboard → Database → Extensions; si este create extension falla,
+-- actívala ahí y vuelve a correr el script.
+create extension if not exists pg_cron;
+
 -- ────────────────────────────────────────────────────────────────
 -- TRIGGER updated_at (compartido por las tablas de este schema)
 -- ────────────────────────────────────────────────────────────────
@@ -364,11 +370,14 @@ create trigger trg_finanzas_updated_at
 -- ================================================================
 -- CONFIGURACIÓN DE FINANZAS
 -- Fila única, activable/desactivable desde Configuración → Módulo
--- Finanzas. Hoy solo controla la ventana de registro de 48h.
+-- Finanzas: ventana de registro de 48h, y hora/método del egreso
+-- automático mensual de Diezmos de Diezmos.
 -- ================================================================
 create table if not exists fuente_verdad.configuracion_finanzas (
-  id                  int primary key default 1 check (id = 1),
-  exigir_registro_48h boolean not null default false
+  id                          int primary key default 1 check (id = 1),
+  exigir_registro_48h         boolean not null default false,
+  diezmos_diezmos_hora        time not null default '23:30:00',
+  diezmos_diezmos_metodo_pago text references fuente_verdad.metodos_pago(nombre)
 );
 
 insert into fuente_verdad.configuracion_finanzas (id)
@@ -537,6 +546,127 @@ create policy "comprobantes_finanzas_delete"
     bucket_id = 'comprobantes-finanzas'
     and fuente_verdad.mi_permiso('finanzas') = 'editor'
   );
+
+-- ================================================================
+-- DIEZMOS DE DIEZMOS — egreso automático mensual
+-- El último día del mes, después de la hora configurada, se crea un
+-- egreso por el 10% de los diezmos ('Diezmos', ingreso) del mes en
+-- curso y se avisa a cada Editor de Finanzas (por persona).
+-- ================================================================
+create table if not exists fuente_verdad.diezmos_diezmos_ejecuciones (
+  id           uuid primary key default gen_random_uuid(),
+  anio         int not null,
+  mes          int not null,
+  monto        numeric(14, 0) not null,
+  finanzas_id  uuid references fuente_verdad.finanzas(id) on delete set null,
+  ejecutado_en timestamptz not null default now(),
+
+  unique (anio, mes)
+);
+
+alter table fuente_verdad.diezmos_diezmos_ejecuciones enable row level security;
+
+create policy "diezmos_diezmos_ejecuciones_select"
+  on fuente_verdad.diezmos_diezmos_ejecuciones for select
+  to authenticated
+  using (fuente_verdad.mi_permiso('finanzas') in ('lector', 'editor'));
+
+-- Una fila por persona: cada Editor de Finanzas marca "ya lo vi" por
+-- su cuenta, sin afectar a los demás.
+create table if not exists fuente_verdad.diezmos_diezmos_notificaciones (
+  id           uuid primary key default gen_random_uuid(),
+  ejecucion_id uuid not null references fuente_verdad.diezmos_diezmos_ejecuciones(id) on delete cascade,
+  miembro_id   uuid not null references fuente_verdad.miembros(id) on delete cascade,
+  visto        boolean not null default false,
+  creado_en    timestamptz not null default now(),
+
+  unique (ejecucion_id, miembro_id)
+);
+
+alter table fuente_verdad.diezmos_diezmos_notificaciones enable row level security;
+
+create policy "ddn_select_propia"
+  on fuente_verdad.diezmos_diezmos_notificaciones for select
+  to authenticated
+  using (miembro_id = (select id from fuente_verdad.miembros where user_id = auth.uid()));
+
+create policy "ddn_update_propia"
+  on fuente_verdad.diezmos_diezmos_notificaciones for update
+  to authenticated
+  using (miembro_id = (select id from fuente_verdad.miembros where user_id = auth.uid()))
+  with check (miembro_id = (select id from fuente_verdad.miembros where user_id = auth.uid()));
+
+alter publication supabase_realtime add table fuente_verdad.diezmos_diezmos_notificaciones;
+
+create or replace function fuente_verdad.ejecutar_diezmos_de_diezmos()
+returns void
+language plpgsql
+security definer
+set search_path = fuente_verdad
+as $$
+declare
+  hoy date := (now() at time zone 'America/Bogota')::date;
+  cfg fuente_verdad.configuracion_finanzas%rowtype;
+  ultimo_dia date := (date_trunc('month', hoy) + interval '1 month - 1 day')::date;
+  monto_calculado numeric(14,0);
+  nueva_ejecucion_id uuid;
+  nuevo_finanzas_id uuid;
+begin
+  select * into cfg from fuente_verdad.configuracion_finanzas where id = 1;
+
+  if hoy != ultimo_dia then
+    return;
+  end if;
+
+  if (now() at time zone 'America/Bogota')::time < cfg.diezmos_diezmos_hora then
+    return;
+  end if;
+
+  monto_calculado := coalesce((
+    select round(sum(monto) * 0.10)
+    from fuente_verdad.finanzas
+    where tipo_movimiento = 'ingreso' and tipo = 'Diezmos'
+      and fecha between date_trunc('month', hoy)::date and ultimo_dia
+  ), 0);
+
+  insert into fuente_verdad.diezmos_diezmos_ejecuciones (anio, mes, monto)
+  values (extract(year from hoy)::int, extract(month from hoy)::int, monto_calculado)
+  on conflict (anio, mes) do nothing
+  returning id into nueva_ejecucion_id;
+
+  if nueva_ejecucion_id is null then
+    return;
+  end if;
+
+  insert into fuente_verdad.finanzas (fecha, nombre, tipo_movimiento, tipo, metodo_pago, monto, observaciones, user_email)
+  values (
+    hoy,
+    'Diezmos de Diezmos',
+    'egreso',
+    'Diezmos de Diezmos',
+    coalesce(cfg.diezmos_diezmos_metodo_pago, 'Transferencia'),
+    monto_calculado,
+    'Generado automáticamente: 10% de diezmos de ' || to_char(hoy, 'TMMonth YYYY'),
+    'automatico@fuenteverdad'
+  )
+  returning id into nuevo_finanzas_id;
+
+  update fuente_verdad.diezmos_diezmos_ejecuciones
+  set finanzas_id = nuevo_finanzas_id
+  where id = nueva_ejecucion_id;
+
+  insert into fuente_verdad.diezmos_diezmos_notificaciones (ejecucion_id, miembro_id)
+  select nueva_ejecucion_id, m.id
+  from fuente_verdad.miembros m
+  where m.rol = 'Administrador'
+     or exists (
+       select 1 from fuente_verdad.permisos p
+       where p.rol = m.rol and p.modulo = 'finanzas' and p.nivel = 'editor'
+     );
+end;
+$$;
+
+select cron.schedule('diezmos-de-diezmos', '*/10 * * * *', 'select fuente_verdad.ejecutar_diezmos_de_diezmos();');
 
 -- ────────────────────────────────────────────────────────────────
 -- VERIFICACIÓN (ejecuta estas líneas por separado si quieres)

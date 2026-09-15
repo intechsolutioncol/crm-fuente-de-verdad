@@ -76,6 +76,25 @@ export interface MetodoFinanzas {
 export interface ConfiguracionFinanzas {
   id: number
   exigir_registro_48h: boolean
+  diezmos_diezmos_hora: string        // 'HH:MM:SS'
+  diezmos_diezmos_metodo_pago: string | null
+}
+
+export interface DiezmosDiezmosEjecucion {
+  id: string
+  anio: number
+  mes: number
+  monto: number
+  finanzas_id: string | null
+  ejecutado_en: string
+}
+
+export interface DiezmosDiezmosNotificacion {
+  id: string
+  ejecucion_id: string
+  miembro_id: string
+  visto: boolean
+  creado_en: string
 }
 
 export interface Movimiento {

@@ -55,7 +55,10 @@ export default async function ConfiguracionPage() {
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Reglas de registro</h3>
             <ReglasFinanzasTab
-              configuracionInicial={(configuracionFinanzas as ConfiguracionFinanzas) ?? { id: 1, exigir_registro_48h: false }}
+              configuracionInicial={(configuracionFinanzas as ConfiguracionFinanzas) ?? {
+                id: 1, exigir_registro_48h: false, diezmos_diezmos_hora: '23:30:00', diezmos_diezmos_metodo_pago: null,
+              }}
+              metodosPago={(metodosPago ?? []) as MetodoFinanzas[]}
             />
           </div>
           <div>

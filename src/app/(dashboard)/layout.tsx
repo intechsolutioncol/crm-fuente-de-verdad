@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Topbar } from '@/components/layout/Topbar'
+import { DiezmosDiezmosModal } from '@/components/finanzas/DiezmosDiezmosModal'
 import { cn } from '@/lib/utils'
 import type { RolMiembro } from '@/types'
 
@@ -13,6 +14,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [user, setUser] = useState<{ name: string; initial: string; email: string } | null>(null)
   const [userRol, setUserRol] = useState<RolMiembro | null>(null)
+  const [miembroId, setMiembroId] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -32,15 +34,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       const { data: miembro } = await supabase
         .from('miembros')
-        .select('rol')
+        .select('id, rol')
         .eq('user_id', data.user.id)
         .single()
       setUserRol((miembro?.rol as RolMiembro) ?? null)
+      setMiembroId(miembro?.id ?? null)
     })
   }, [router])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {miembroId && <DiezmosDiezmosModal miembroId={miembroId} />}
 
       {/* Sidebar escritorio */}
       <div className="hidden md:flex flex-shrink-0">

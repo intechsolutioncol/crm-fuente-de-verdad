@@ -1,19 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { AccesoDenegado } from '@/components/layout/AccesoDenegado'
+import { calcEdad } from '@/lib/utils/format'
 import type { Miembro } from '@/types'
 
 function formatFecha(iso: string) {
   const [y, m, d] = iso.split('-')
   return `${d}/${m}/${y}`
-}
-
-function calcEdad(fechaNacimiento: string) {
-  const [y, m, d] = fechaNacimiento.split('-').map(Number)
-  const hoy = new Date()
-  let edad  = hoy.getFullYear() - y
-  const mesActual = hoy.getMonth() + 1
-  if (mesActual < m || (mesActual === m && hoy.getDate() < d)) edad--
-  return edad
 }
 
 const ROL_COLOR: Record<string, string> = {

@@ -33,6 +33,15 @@ export function todayISO(): string {
   return format(new Date(), 'yyyy-MM-dd')
 }
 
+export function calcEdad(fechaNacimiento: string): number {
+  const [y, m, d] = fechaNacimiento.split('-').map(Number)
+  const hoy = new Date()
+  let edad  = hoy.getFullYear() - y
+  const mesActual = hoy.getMonth() + 1
+  if (mesActual < m || (mesActual === m && hoy.getDate() < d)) edad--
+  return edad
+}
+
 export function getCodigoAporte(id: string, createdAt: string): string {
   try {
     const fecha = format(parseISO(createdAt), 'yyyyMMdd')

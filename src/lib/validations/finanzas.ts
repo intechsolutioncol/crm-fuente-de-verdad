@@ -13,9 +13,9 @@ export const movimientoSchema = z.object({
   // el <Select> solo ofrece categorías activas válidas para la dirección
   // elegida, y el FK en la base de datos es la validación real.
   tipo: z.string().min(1, 'Selecciona una categoría'),
-  metodo_pago: z.enum(['Efectivo', 'Transferencia', 'Otro'] as const, {
-    error: 'Selecciona un método de pago válido',
-  }),
+  // El método de pago también es configurable (fuente_verdad.metodos_pago),
+  // mismo tratamiento que la categoría.
+  metodo_pago: z.string().min(1, 'Selecciona un método de pago'),
   monto: z
     .string()
     .min(1, 'El monto es requerido')

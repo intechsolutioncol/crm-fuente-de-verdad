@@ -53,14 +53,21 @@ export interface MiembroFormData {
 
 // ── Finanzas ───────────────────────────────────────────────────
 export type TipoMovimiento = 'ingreso' | 'egreso'
-export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Otro'
 
-// Las categorías ya no son un set fijo: son configurables desde
-// /configuracion (tabla fuente_verdad.categorias_finanzas). El FK en
-// la base de datos es la validación real; aquí solo son `string`.
+// Las categorías y el método de pago ya no son un set fijo: son
+// configurables desde /configuracion (tablas categorias_finanzas y
+// metodos_pago). El FK en la base de datos es la validación real;
+// aquí ambos son `string`.
 export interface CategoriaFinanzas {
   id: string
   tipo_movimiento: TipoMovimiento
+  nombre: string
+  activo: boolean
+  orden: number
+}
+
+export interface MetodoFinanzas {
+  id: string
   nombre: string
   activo: boolean
   orden: number
@@ -72,7 +79,7 @@ export interface Movimiento {
   nombre: string
   tipo_movimiento: TipoMovimiento
   tipo: string            // categoría — nombre de fuente_verdad.categorias_finanzas
-  metodo_pago: MetodoPago
+  metodo_pago: string     // nombre de fuente_verdad.metodos_pago
   monto: number
   observaciones: string
   user_email: string
@@ -85,7 +92,7 @@ export interface MovimientoFormData {
   nombre: string
   tipo_movimiento: TipoMovimiento
   tipo: string
-  metodo_pago: MetodoPago | ''
+  metodo_pago: string
   monto: string
   observaciones: string
 }

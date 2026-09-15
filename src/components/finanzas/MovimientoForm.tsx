@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { movimientoSchema } from '@/lib/validations/finanzas'
 import { createClient } from '@/lib/supabase/client'
 import { todayISO } from '@/lib/utils/format'
-import type { Movimiento, TipoMovimiento, CategoriaFinanzas } from '@/types'
+import type { Movimiento, TipoMovimiento, CategoriaFinanzas, MetodoFinanzas } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -58,13 +58,21 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
   const esIngreso = tipoMovimiento === 'ingreso'
 
   const [categoriasFinanzas, setCategoriasFinanzas] = useState<CategoriaFinanzas[]>([])
+  const [metodosPago, setMetodosPago] = useState<MetodoFinanzas[]>([])
   useEffect(() => {
-    createClient()
+    const supabase = createClient()
+    supabase
       .from('categorias_finanzas')
       .select('*')
       .eq('activo', true)
       .order('orden')
       .then(({ data }) => setCategoriasFinanzas((data ?? []) as CategoriaFinanzas[]))
+    supabase
+      .from('metodos_pago')
+      .select('*')
+      .eq('activo', true)
+      .order('orden')
+      .then(({ data }) => setMetodosPago((data ?? []) as MetodoFinanzas[]))
   }, [])
 
   const categorias = categoriasFinanzas
@@ -199,15 +207,13 @@ export function MovimientoForm({ movimiento, tipoMovimientoInicial, userEmail, o
           <Label>Método de pago *</Label>
           <Select
             value={watch('metodo_pago')}
-            onValueChange={v => v && setValue('metodo_pago', v as MovimientoSchema['metodo_pago'], { shouldValidate: true })}
+            onValueChange={v => v && setValue('metodo_pago', v, { shouldValidate: true })}
           >
             <SelectTrigger className={errors.metodo_pago ? 'border-destructive' : ''}>
               <SelectValue placeholder="Seleccionar..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Efectivo">Efectivo</SelectItem>
-              <SelectItem value="Transferencia">Transferencia</SelectItem>
-              <SelectItem value="Otro">Otro</SelectItem>
+              {metodosPago.map(m => <SelectItem key={m.id} value={m.nombre}>{m.nombre}</SelectItem>)}
             </SelectContent>
           </Select>
           {errors.metodo_pago && <p className="text-xs text-destructive">{errors.metodo_pago.message}</p>}

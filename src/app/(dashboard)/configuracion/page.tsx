@@ -4,7 +4,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { RolesTab } from '@/components/configuracion/RolesTab'
 import { PermisosTab } from '@/components/configuracion/PermisosTab'
 import { CategoriasFinanzasTab } from '@/components/configuracion/CategoriasFinanzasTab'
-import type { Miembro, Permiso, CategoriaFinanzas } from '@/types'
+import { MetodosPagoTab } from '@/components/configuracion/MetodosPagoTab'
+import type { Miembro, Permiso, CategoriaFinanzas, MetodoFinanzas } from '@/types'
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
@@ -19,10 +20,11 @@ export default async function ConfiguracionPage() {
     )
   }
 
-  const [{ data: miembros }, { data: permisos }, { data: categoriasFinanzas }] = await Promise.all([
+  const [{ data: miembros }, { data: permisos }, { data: categoriasFinanzas }, { data: metodosPago }] = await Promise.all([
     supabase.from('miembros').select('*').order('nombres', { ascending: true }),
     supabase.from('permisos').select('*'),
     supabase.from('categorias_finanzas').select('*'),
+    supabase.from('metodos_pago').select('*'),
   ])
 
   return (
@@ -47,8 +49,12 @@ export default async function ConfiguracionPage() {
           <PermisosTab permisosIniciales={(permisos ?? []) as Permiso[]} />
         </TabsContent>
 
-        <TabsContent value="categorias-finanzas">
+        <TabsContent value="categorias-finanzas" className="space-y-8">
           <CategoriasFinanzasTab categoriasIniciales={(categoriasFinanzas ?? []) as CategoriaFinanzas[]} />
+          <div>
+            <h3 className="text-sm font-bold text-foreground mb-3">Métodos de pago</h3>
+            <MetodosPagoTab metodosIniciales={(metodosPago ?? []) as MetodoFinanzas[]} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

@@ -39,7 +39,7 @@ const MODULOS = [
   { label: 'Asistencia', desc: 'Check-in por QR a los servicios', href: '/asistencia', activo: true },
   { label: 'Ministerios', desc: 'Blogs de Ella, Él, FreshInk y Kids', href: '/mis-ministerios', activo: true },
   { label: 'Eventos', desc: 'Planificación de actividades', href: '#', activo: false },
-  { label: 'Reportes', desc: 'Análisis e informes', href: '#', activo: false },
+  { label: 'Reportes', desc: 'Panel general de todos los módulos', href: '/reportes', activo: true },
 ]
 
 export default async function HomePage() {

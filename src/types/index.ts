@@ -177,3 +177,26 @@ export interface Visitante {
   primera_visita: string
   created_at: string
 }
+
+// ── Ministerios ────────────────────────────────────────────────
+export interface Ministerio {
+  id: string
+  nombre: string
+  slug: string
+  descripcion: string | null
+  lider_id: string | null
+  activo: boolean
+  orden: number
+  created_at: string
+}
+
+export interface PublicacionMinisterio {
+  id: string
+  ministerio_id: string
+  titulo: string
+  contenido: string
+  imagen_path: string | null
+  autor_id: string | null
+  created_at: string
+  updated_at: string
+}

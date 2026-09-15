@@ -33,6 +33,7 @@ export async function proxy(request: NextRequest) {
     || pathname.startsWith('/api/auth')
     || pathname.startsWith('/asistencia/checkin')
     || pathname.startsWith('/api/asistencia')
+    || pathname.startsWith('/ministerios')
   const isOnboardingPath = pathname.startsWith('/onboarding')
   const onboardingDone  = user?.user_metadata?.onboarding_completed === true
 

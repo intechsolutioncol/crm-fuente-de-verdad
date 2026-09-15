@@ -37,7 +37,7 @@ const MODULOS = [
   { label: 'Finanzas', desc: 'Diezmos, ofrendas y donaciones', href: '/finanzas', activo: true },
   { label: 'Miembros', desc: 'Gestión de la congregación', href: '/miembros', activo: true },
   { label: 'Asistencia', desc: 'Check-in por QR a los servicios', href: '/asistencia', activo: true },
-  { label: 'Ministerios', desc: 'Grupos y equipos de servicio', href: '#', activo: false },
+  { label: 'Ministerios', desc: 'Blogs de Ella, Él, FreshInk y Kids', href: '/mis-ministerios', activo: true },
   { label: 'Eventos', desc: 'Planificación de actividades', href: '#', activo: false },
   { label: 'Reportes', desc: 'Análisis e informes', href: '#', activo: false },
 ]

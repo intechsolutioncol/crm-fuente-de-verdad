@@ -6,7 +6,8 @@ import { PermisosTab } from '@/components/configuracion/PermisosTab'
 import { CategoriasFinanzasTab } from '@/components/configuracion/CategoriasFinanzasTab'
 import { MetodosPagoTab } from '@/components/configuracion/MetodosPagoTab'
 import { ReglasFinanzasTab } from '@/components/configuracion/ReglasFinanzasTab'
-import type { Miembro, Permiso, CategoriaFinanzas, MetodoFinanzas, ConfiguracionFinanzas } from '@/types'
+import { MinisteriosTab } from '@/components/configuracion/MinisteriosTab'
+import type { Miembro, Permiso, CategoriaFinanzas, MetodoFinanzas, ConfiguracionFinanzas, Ministerio } from '@/types'
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
@@ -21,12 +22,13 @@ export default async function ConfiguracionPage() {
     )
   }
 
-  const [{ data: miembros }, { data: permisos }, { data: categoriasFinanzas }, { data: metodosPago }, { data: configuracionFinanzas }] = await Promise.all([
+  const [{ data: miembros }, { data: permisos }, { data: categoriasFinanzas }, { data: metodosPago }, { data: configuracionFinanzas }, { data: ministerios }] = await Promise.all([
     supabase.from('miembros').select('*').order('nombres', { ascending: true }),
     supabase.from('permisos').select('*'),
     supabase.from('categorias_finanzas').select('*'),
     supabase.from('metodos_pago').select('*'),
     supabase.from('configuracion_finanzas').select('*').eq('id', 1).single(),
+    supabase.from('ministerios').select('*'),
   ])
 
   return (
@@ -41,6 +43,7 @@ export default async function ConfiguracionPage() {
           <TabsTrigger value="roles">Miembros y roles</TabsTrigger>
           <TabsTrigger value="permisos">Permisos por módulo</TabsTrigger>
           <TabsTrigger value="categorias-finanzas">Módulo Finanzas</TabsTrigger>
+          <TabsTrigger value="ministerios">Ministerios</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roles">
@@ -69,6 +72,13 @@ export default async function ConfiguracionPage() {
             <h3 className="text-sm font-bold text-foreground mb-3">Métodos de pago</h3>
             <MetodosPagoTab metodosIniciales={(metodosPago ?? []) as MetodoFinanzas[]} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="ministerios">
+          <MinisteriosTab
+            ministeriosIniciales={(ministerios ?? []) as Ministerio[]}
+            miembros={(miembros ?? []) as Pick<Miembro, 'id' | 'nombres' | 'apellidos'>[]}
+          />
         </TabsContent>
       </Tabs>
     </div>
